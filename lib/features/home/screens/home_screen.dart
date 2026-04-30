@@ -7,11 +7,16 @@ import 'package:matchfit/core/widgets/avatar_widget.dart';
 import 'package:matchfit/core/providers/profile_provider.dart';
 import '../../events/repositories/event_repository.dart';
 import '../../auth/repositories/auth_repository.dart';
+import 'package:matchfit/core/services/location_service.dart';
 
 // ── Providers ──────────────────────────────────────────────────────
 
 final eventsProvider = FutureProvider.autoDispose((ref) async {
-  return ref.read(eventRepositoryProvider).getNearbyEvents();
+  final userLoc = ref.watch(userLocationProvider).value;
+  return ref.read(eventRepositoryProvider).getNearbyEvents(
+    lat: userLoc?.latitude,
+    lng: userLoc?.longitude,
+  );
 });
 
 final weeklyStatsProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) async {

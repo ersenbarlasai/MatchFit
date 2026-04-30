@@ -7,6 +7,8 @@ import '../../auth/repositories/auth_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../referee/repositories/referee_repository.dart';
 import '../../guardian/repositories/guardian_repository.dart';
+import 'package:matchfit/core/services/location_search_service.dart';
+import 'dart:async';
 
 class CreateEventScreen extends ConsumerStatefulWidget {
   const CreateEventScreen({super.key});
@@ -26,6 +28,25 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   DateTime? selectedDate;
   TimeOfDay? selectedTime;
   bool _isLoading = false;
+
+  // Location search state
+  final _searchService = LocationSearchService();
+  List<LocationSuggestion> _suggestions = [];
+  Timer? _debounce;
+  double? _selectedLat;
+  double? _selectedLng;
+
+  void _onLocationChanged(String value) {
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    _debounce = Timer(const Duration(milliseconds: 500), () async {
+      if (value.length > 2) {
+        final results = await _searchService.search(value);
+        setState(() => _suggestions = results);
+      } else {
+        setState(() => _suggestions = []);
+      }
+    });
+  }
 
   Future<void> _publishEvent() async {
     if (_titleController.text.isEmpty || selectedDate == null || selectedTime == null || _locationController.text.isEmpty) {
@@ -82,6 +103,8 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
         'event_date': eventDate.toIso8601String().split('T')[0],
         'start_time': formattedTime,
         'location_name': _locationController.text,
+        'lat': _selectedLat,
+        'lng': _selectedLng,
         'max_participants': maxParticipants.toInt(),
         'required_level': requiredLevel,
         'sport_id': sportResponse['id'],
@@ -207,6 +230,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
             const SizedBox(height: 16),
             TextField(
               controller: _locationController,
+              onChanged: _onLocationChanged,
               decoration: const InputDecoration(
                 labelText: 'Location',
                 hintText: 'Search for a court or park...',
@@ -216,6 +240,35 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                 ),
               ),
             ),
+            if (_suggestions.isNotEmpty)
+              Container(
+                margin: const EdgeInsets.only(top: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E1E1E),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white12),
+                ),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: _suggestions.length,
+                  separatorBuilder: (_, __) => const Divider(color: Colors.white10, height: 1),
+                  itemBuilder: (context, index) {
+                    final s = _suggestions[index];
+                    return ListTile(
+                      title: Text(s.description, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                      onTap: () {
+                        setState(() {
+                          _locationController.text = s.description;
+                          _selectedLat = s.lat;
+                          _selectedLng = s.lng;
+                          _suggestions = [];
+                        });
+                      },
+                    );
+                  },
+                ),
+              ),
             const SizedBox(height: 24),
             const Text('Max Participants', style: TextStyle(fontWeight: FontWeight.bold)),
             Slider(

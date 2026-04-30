@@ -5,6 +5,8 @@ import 'package:matchfit/core/theme.dart';
 import 'package:matchfit/core/widgets/avatar_widget.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../repositories/event_repository.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import '../../auth/repositories/auth_repository.dart';
 
 // ── Roster Provider ────────────────────────────────────────────────
@@ -154,16 +156,23 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     }
   }
 
-  String _formatDate(String? dateStr) {
+  String _formatDate(String? dateStr, String? timeStr) {
     if (dateStr == null || dateStr.isEmpty) return 'TBD';
     try {
       final dt = DateTime.parse(dateStr);
       const months = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
           'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      final h = dt.hour > 12 ? dt.hour - 12 : dt.hour;
-      final m = dt.minute.toString().padLeft(2, '0');
-      final ampm = dt.hour >= 12 ? 'PM' : 'AM';
-      return '${months[dt.month]} ${dt.day}, $h:$m $ampm';
+      
+      String displayTime = '00:00 AM';
+      if (timeStr != null && timeStr.isNotEmpty) {
+        final parts = timeStr.split(':');
+        if (parts.length >= 2) {
+          final h = int.parse(parts[0]);
+          final m = int.parse(parts[1]);
+          displayTime = '${h > 12 ? h - 12 : (h == 0 ? 12 : h)}:${m.toString().padLeft(2, '0')} ${h >= 12 ? 'PM' : 'AM'}';
+        }
+      }
+      return '${months[dt.month]} ${dt.day}, $displayTime';
     } catch (_) {
       return dateStr;
     }
@@ -175,7 +184,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     final sport = widget.event['sports']?['name'] as String? ?? 'Sport';
     final description = widget.event['description'] as String? ?? 'No description available.';
     final location = widget.event['location_name'] as String? ?? widget.event['location_text'] as String? ?? 'Location TBD';
-    final date = _formatDate(widget.event['event_date'] as String?);
+    final date = _formatDate(widget.event['event_date'] as String?, widget.event['start_time'] as String?);
     final hostProfile = widget.event['profiles'] as Map<String, dynamic>?;
     final hostName = hostProfile?['full_name'] as String? ?? 'Host';
     final hostAvatar = hostProfile?['avatar_url'] as String?;
@@ -286,7 +295,11 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                         const Text('Location',
                             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17)),
                         const SizedBox(height: 12),
-                        _LocationCard(location: location),
+                        _LocationCard(
+                          location: location,
+                          lat: widget.event['lat'] as double?,
+                          lng: widget.event['lng'] as double?,
+                        ),
 
                         const SizedBox(height: 24),
                         const _Divider(),
@@ -420,7 +433,9 @@ class _SpotlightPainter extends CustomPainter {
 
 class _LocationCard extends StatelessWidget {
   final String location;
-  const _LocationCard({required this.location});
+  final double? lat;
+  final double? lng;
+  const _LocationCard({required this.location, this.lat, this.lng});
 
   @override
   Widget build(BuildContext context) {
@@ -434,24 +449,58 @@ class _LocationCard extends StatelessWidget {
         children: [
           // Mini map preview
           Container(
-            height: 90,
-            decoration: BoxDecoration(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-              gradient: const LinearGradient(
-                colors: [Color(0xFF0A1628), Color(0xFF0D1F3C)],
-              ),
+            height: 120,
+            decoration: const BoxDecoration(
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
             ),
-            child: Center(
-              child: Container(
-                width: 34, height: 34,
-                decoration: BoxDecoration(
-                  color: MatchFitTheme.accentGreen,
-                  shape: BoxShape.circle,
-                  boxShadow: [BoxShadow(color: MatchFitTheme.accentGreen.withOpacity(0.5), blurRadius: 14)],
-                ),
-                child: const Icon(Icons.location_on, color: Colors.black, size: 18),
-              ),
-            ),
+            clipBehavior: Clip.antiAlias,
+            child: (lat != null && lng != null)
+                ? FlutterMap(
+                    options: MapOptions(
+                      initialCenter: LatLng(lat!, lng!),
+                      initialZoom: 14.0,
+                      interactionOptions: const InteractionOptions(flags: InteractiveFlag.none),
+                    ),
+                    children: [
+                      TileLayer(
+                        urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        userAgentPackageName: 'com.matchfit.app',
+                      ),
+                      MarkerLayer(
+                        markers: [
+                          Marker(
+                            point: LatLng(lat!, lng!),
+                            width: 40,
+                            height: 40,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: MatchFitTheme.accentGreen,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.black, width: 2),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: MatchFitTheme.accentGreen.withOpacity(0.5),
+                                    blurRadius: 10,
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(Icons.location_on, color: Colors.black, size: 20),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  )
+                : Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Color(0xFF0A1628), Color(0xFF0D1F3C)],
+                      ),
+                    ),
+                    child: const Center(
+                      child: Icon(Icons.map_outlined, color: Colors.white24, size: 32),
+                    ),
+                  ),
           ),
           Padding(
             padding: const EdgeInsets.all(14),
@@ -462,10 +511,11 @@ class _LocationCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(location,
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13, height: 1.4)),
                     ],
                   ),
                 ),
+                const SizedBox(width: 12),
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(

@@ -18,8 +18,25 @@ class EventRepository {
     await _supabase.from('events').delete().eq('id', eventId);
   }
 
-  Future<List<Map<String, dynamic>>> getNearbyEvents() async {
-    // For MVP, we just fetch all open events
+  Future<List<Map<String, dynamic>>> getNearbyEvents({double? lat, double? lng, double radius = 20000}) async {
+    if (lat != null && lng != null) {
+      final response = await _supabase.rpc('get_nearby_events', params: {
+        'user_lat': lat,
+        'user_lng': lng,
+        'radius_meters': radius,
+      });
+      // RPC returns different structure, we need to map it back to what UI expects
+      return (response as List).map((e) => Map<String, dynamic>.from({
+        ...e,
+        'sports': {'name': e['sport_name']},
+        'profiles': {
+          'full_name': e['host_name'],
+          'avatar_url': e['host_avatar'],
+        }
+      })).toList();
+    }
+
+    // Fallback if no location
     final response = await _supabase
         .from('events')
         .select('*, sports(name), profiles(full_name, trust_score, avatar_url)')

@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:matchfit/core/theme.dart';
 import '../repositories/event_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:matchfit/core/services/location_search_service.dart';
+import 'dart:async';
 
 class EditEventScreen extends ConsumerStatefulWidget {
   final Map<String, dynamic> event;
@@ -24,6 +26,25 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
   DateTime? selectedDate;
   TimeOfDay? selectedTime;
   bool _isLoading = false;
+
+  // Location search state
+  final _searchService = LocationSearchService();
+  List<LocationSuggestion> _suggestions = [];
+  Timer? _debounce;
+  double? _selectedLat;
+  double? _selectedLng;
+
+  void _onLocationChanged(String value) {
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    _debounce = Timer(const Duration(milliseconds: 500), () async {
+      if (value.length > 2) {
+        final results = await _searchService.search(value);
+        setState(() => _suggestions = results);
+      } else {
+        setState(() => _suggestions = []);
+      }
+    });
+  }
 
   @override
   void initState() {
@@ -47,6 +68,9 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
         selectedTime = TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
       }
     }
+    
+    _selectedLat = (e['lat'] as num?)?.toDouble();
+    _selectedLng = (e['lng'] as num?)?.toDouble();
   }
 
   Future<void> _updateEvent() async {
@@ -81,6 +105,8 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
         'event_date': eventDate.toIso8601String().split('T')[0],
         'start_time': formattedTime,
         'location_name': _locationController.text,
+        'lat': _selectedLat,
+        'lng': _selectedLng,
         'max_participants': maxParticipants.toInt(),
         'required_level': requiredLevel,
         'sport_id': sportResponse['id'],
@@ -178,8 +204,38 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
             const SizedBox(height: 16),
             TextField(
               controller: _locationController,
+              onChanged: _onLocationChanged,
               decoration: const InputDecoration(labelText: 'Location', prefixIcon: Icon(Icons.location_on), border: OutlineInputBorder()),
             ),
+            if (_suggestions.isNotEmpty)
+              Container(
+                margin: const EdgeInsets.only(top: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E1E1E),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white12),
+                ),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: _suggestions.length,
+                  separatorBuilder: (_, __) => const Divider(color: Colors.white10, height: 1),
+                  itemBuilder: (context, index) {
+                    final s = _suggestions[index];
+                    return ListTile(
+                      title: Text(s.description, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                      onTap: () {
+                        setState(() {
+                          _locationController.text = s.description;
+                          _selectedLat = s.lat;
+                          _selectedLng = s.lng;
+                          _suggestions = [];
+                        });
+                      },
+                    );
+                  },
+                ),
+              ),
             const SizedBox(height: 24),
             Text('Max Participants: ${maxParticipants.round()}'),
             Slider(

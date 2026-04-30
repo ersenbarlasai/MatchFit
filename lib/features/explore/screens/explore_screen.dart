@@ -8,13 +8,44 @@ import 'dart:math' as math;
 import '../../matchmaker/repositories/matchmaker_repository.dart';
 import '../../auth/repositories/auth_repository.dart';
 import '../../home/screens/home_screen.dart'; // EventCard
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:matchfit/core/services/location_service.dart';
+import '../../events/repositories/event_repository.dart';
 
 // ── Providers ─────────────────────────────────────────────────────
 
+class ExploreDistanceNotifier extends Notifier<String> {
+  @override
+  String build() => '< 5km';
+  void setDistance(String val) => state = val;
+}
+
+final exploreDistanceProvider = NotifierProvider<ExploreDistanceNotifier, String>(ExploreDistanceNotifier.new);
+
+class ExploreSportNotifier extends Notifier<String> {
+  @override
+  String build() => 'All';
+  void setSport(String val) => state = val;
+}
+
+final exploreSportProvider = NotifierProvider<ExploreSportNotifier, String>(ExploreSportNotifier.new);
+
 final exploreMatchesProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
-  final user = ref.read(authRepositoryProvider).currentUser;
-  if (user == null) return [];
-  return await ref.read(matchmakerProvider).getSmartMatches(user.id);
+  final userLoc = ref.watch(userLocationProvider).value;
+  final distanceStr = ref.watch(exploreDistanceProvider);
+  
+  double radius = 50000; // Default 50km
+  if (distanceStr == '< 5km') radius = 5000;
+  if (distanceStr == '< 10km') radius = 10000;
+  if (distanceStr == '< 20km') radius = 20000;
+  if (distanceStr == 'Any') radius = 100000;
+
+  return await ref.read(eventRepositoryProvider).getNearbyEvents(
+    lat: userLoc?.latitude,
+    lng: userLoc?.longitude,
+    radius: radius,
+  );
 });
 
 // ── Explore Screen ─────────────────────────────────────────────────
@@ -27,9 +58,6 @@ class ExploreScreen extends ConsumerStatefulWidget {
 }
 
 class _ExploreScreenState extends ConsumerState<ExploreScreen> {
-  String _selectedSport = 'All';
-  String _selectedDistance = '< 5km';
-  String _searchQuery = '';
   bool _showAdvanced = false;
 
   final _sports = ['All', 'Basketball', 'Tennis', 'Running', 'Football'];
@@ -118,7 +146,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                         children: [
                           const Icon(Icons.sports, color: Color(0xFF4D9DFF), size: 14),
                           const SizedBox(width: 6),
-                          Text(_selectedSport,
+                          Text(ref.watch(exploreSportProvider),
                               style: const TextStyle(
                                   color: Color(0xFF4D9DFF), fontWeight: FontWeight.bold, fontSize: 13)),
                           const SizedBox(width: 4),
@@ -143,7 +171,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                         children: [
                           Icon(Icons.location_on_outlined, color: Colors.white.withOpacity(0.6), size: 14),
                           const SizedBox(width: 6),
-                          Text(_selectedDistance,
+                          Text(ref.watch(exploreDistanceProvider),
                               style: TextStyle(
                                   color: Colors.white.withOpacity(0.8),
                                   fontWeight: FontWeight.bold,
@@ -220,10 +248,11 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
               error: (e, _) => Center(
                   child: Text('Error: $e', style: const TextStyle(color: Colors.white54))),
               data: (events) {
+                final selectedSport = ref.watch(exploreSportProvider);
                 final filtered = events.where((e) {
-                  if (_selectedSport == 'All') return true;
+                  if (selectedSport == 'All') return true;
                   final sport = e['sports']?['name'] as String? ?? '';
-                  return sport.toLowerCase() == _selectedSport.toLowerCase();
+                  return sport.toLowerCase() == selectedSport.toLowerCase();
                 }).toList();
 
                 if (filtered.isEmpty) {
@@ -262,47 +291,52 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
       useSafeArea: true,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (_) => Padding(
-        padding: EdgeInsets.fromLTRB(24, 16, 24,
-            MediaQuery.of(context).viewInsets.bottom + MediaQuery.of(context).padding.bottom + 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(width: 36, height: 4,
-                  decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2))),
+      builder: (_) => Consumer(
+        builder: (context, ref, _) {
+          final selectedSport = ref.watch(exploreSportProvider);
+          return Padding(
+            padding: EdgeInsets.fromLTRB(24, 16, 24,
+                MediaQuery.of(context).viewInsets.bottom + MediaQuery.of(context).padding.bottom + 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(width: 36, height: 4,
+                      decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2))),
+                ),
+                const SizedBox(height: 20),
+                const Text('Select Sport',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: _sports.map((s) {
+                    final active = s == selectedSport;
+                    return GestureDetector(
+                      onTap: () {
+                        ref.read(exploreSportProvider.notifier).setSport(s);
+                        Navigator.pop(context);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: active ? MatchFitTheme.accentGreen : const Color(0xFF2A2A2A),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(s,
+                            style: TextStyle(
+                                color: active ? Colors.black : Colors.white70,
+                                fontWeight: FontWeight.bold)),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
             ),
-            const SizedBox(height: 20),
-            const Text('Select Sport',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: _sports.map((s) {
-                final active = s == _selectedSport;
-                return GestureDetector(
-                  onTap: () {
-                    setState(() => _selectedSport = s);
-                    Navigator.pop(context);
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: active ? MatchFitTheme.accentGreen : const Color(0xFF2A2A2A),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(s,
-                        style: TextStyle(
-                            color: active ? Colors.black : Colors.white70,
-                            fontWeight: FontWeight.bold)),
-                  ),
-                );
-              }).toList(),
-            ),
-          ],
-        ),
+          );
+        }
       ),
     );
   }
@@ -315,47 +349,52 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
       useSafeArea: true,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (_) => Padding(
-        padding: EdgeInsets.fromLTRB(24, 16, 24,
-            MediaQuery.of(context).viewInsets.bottom + MediaQuery.of(context).padding.bottom + 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(width: 36, height: 4,
-                  decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2))),
+      builder: (_) => Consumer(
+        builder: (context, ref, _) {
+          final selectedDistance = ref.watch(exploreDistanceProvider);
+          return Padding(
+            padding: EdgeInsets.fromLTRB(24, 16, 24,
+                MediaQuery.of(context).viewInsets.bottom + MediaQuery.of(context).padding.bottom + 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(width: 36, height: 4,
+                      decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2))),
+                ),
+                const SizedBox(height: 20),
+                const Text('Max Distance',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: _distances.map((d) {
+                    final active = d == selectedDistance;
+                    return GestureDetector(
+                      onTap: () {
+                        ref.read(exploreDistanceProvider.notifier).setDistance(d);
+                        Navigator.pop(context);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: active ? MatchFitTheme.accentGreen : const Color(0xFF2A2A2A),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(d,
+                            style: TextStyle(
+                                color: active ? Colors.black : Colors.white70,
+                                fontWeight: FontWeight.bold)),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
             ),
-            const SizedBox(height: 20),
-            const Text('Select Distance',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: _distances.map((d) {
-                final active = d == _selectedDistance;
-                return GestureDetector(
-                  onTap: () {
-                    setState(() => _selectedDistance = d);
-                    Navigator.pop(context);
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: active ? MatchFitTheme.accentGreen : const Color(0xFF2A2A2A),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(d,
-                        style: TextStyle(
-                            color: active ? Colors.black : Colors.white70,
-                            fontWeight: FontWeight.bold)),
-                  ),
-                );
-              }).toList(),
-            ),
-          ],
-        ),
+          );
+        }
       ),
     );
   }
@@ -363,73 +402,111 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
 
 // ── Map Section ───────────────────────────────────────────────────
 
-class _MapSection extends StatelessWidget {
+class _MapSection extends ConsumerWidget {
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final userLoc = ref.watch(userLocationProvider).value;
+    final eventsAsync = ref.watch(exploreMatchesProvider);
+    final distanceStr = ref.watch(exploreDistanceProvider);
+    
+    double radiusInMeters = 5000;
+    if (distanceStr == '< 10km') radiusInMeters = 10000;
+    if (distanceStr == '< 20km') radiusInMeters = 20000;
+    if (distanceStr == 'Any') radiusInMeters = 0; // Don't show circle
+
+    final center = userLoc != null 
+        ? LatLng(userLoc.latitude, userLoc.longitude)
+        : const LatLng(41.0082, 28.9784); // Istanbul fallback
+
     return Container(
-      height: 180,
+      height: 220,
       margin: const EdgeInsets.symmetric(horizontal: 0),
       child: Stack(
         children: [
-          // Dark map background
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Color(0xFF0A1628), Color(0xFF0D1F3C), Color(0xFF122040)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+          FlutterMap(
+            options: MapOptions(
+              initialCenter: center,
+              initialZoom: radiusInMeters > 0 ? (radiusInMeters > 10000 ? 10.5 : 12.0) : 12.0,
+              interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
+            ),
+            children: [
+              TileLayer(
+                urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                subdomains: const ['a', 'b', 'c'],
+                userAgentPackageName: 'com.matchfit.app',
               ),
-            ),
-          ),
-          // Grid lines (street simulation)
-          CustomPaint(
-            size: const Size(double.infinity, 180),
-            painter: _MapGridPainter(),
-          ),
-          // Event pin — neon green basketball
-          Positioned(
-            left: MediaQuery.of(context).size.width * 0.3,
-            top: 60,
-            child: _MapPin(
-              color: MatchFitTheme.accentGreen,
-              icon: Icons.sports_basketball_outlined,
-              iconColor: Colors.black,
-            ),
-          ),
-          // User pin — blue
-          Positioned(
-            right: MediaQuery.of(context).size.width * 0.2,
-            top: 80,
-            child: _MapPin(
-              color: const Color(0xFF0052FF),
-              icon: Icons.person,
-              iconColor: Colors.white,
-              size: 38,
-            ),
-          ),
-          // Second event pin
-          Positioned(
-            left: MediaQuery.of(context).size.width * 0.55,
-            top: 30,
-            child: _MapPin(
-              color: MatchFitTheme.accentGreen.withOpacity(0.7),
-              icon: Icons.sports_tennis_outlined,
-              iconColor: Colors.black,
-              size: 36,
-            ),
+              if (userLoc != null && radiusInMeters > 0)
+                CircleLayer(
+                  circles: [
+                    CircleMarker(
+                      point: center,
+                      radius: radiusInMeters.toDouble(), // This represents the search radius
+                      useRadiusInMeter: true,
+                      color: MatchFitTheme.accentGreen.withOpacity(0.12),
+                      borderColor: MatchFitTheme.accentGreen,
+                      borderStrokeWidth: 3,
+                    ),
+                  ],
+                ),
+              MarkerLayer(
+                markers: [
+                  // User Marker
+                  if (userLoc != null)
+                    Marker(
+                      point: center,
+                      width: 40, height: 40,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0052FF),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                          boxShadow: [BoxShadow(color: const Color(0xFF0052FF).withOpacity(0.5), blurRadius: 8)],
+                        ),
+                        child: const Icon(Icons.person, color: Colors.white, size: 20),
+                      ),
+                    ),
+                  // Event Markers
+                  ...eventsAsync.maybeWhen(
+                    data: (events) => events.where((e) => e['lat'] != null && e['lng'] != null).map((e) {
+                      final sport = e['sports']?['name'] as String? ?? 'Sport';
+                      IconData icon = Icons.sports_basketball;
+                      if (sport.toLowerCase().contains('tennis')) icon = Icons.sports_tennis;
+                      if (sport.toLowerCase().contains('run')) icon = Icons.directions_run;
+                      if (sport.toLowerCase().contains('foot')) icon = Icons.sports_soccer;
+
+                      return Marker(
+                        point: LatLng(e['lat'] as double, e['lng'] as double),
+                        width: 40, height: 40,
+                        child: GestureDetector(
+                          onTap: () => context.push('/event-detail', extra: e),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: MatchFitTheme.accentGreen,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.black, width: 2),
+                              boxShadow: [BoxShadow(color: MatchFitTheme.accentGreen.withOpacity(0.5), blurRadius: 10)],
+                            ),
+                            child: Icon(icon, color: Colors.black, size: 20),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                    orElse: () => [],
+                  ),
+                ],
+              ),
+            ],
           ),
           // Bottom fade
           Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
+            bottom: 0, left: 0, right: 0,
             child: Container(
-              height: 60,
+              height: 80,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Colors.transparent, const Color(0xFF121212).withOpacity(0.95)],
+                  colors: [Colors.transparent, const Color(0xFF121212).withOpacity(0.9)],
                 ),
               ),
             ),
@@ -501,17 +578,26 @@ class _NearbyEventCard extends StatelessWidget {
   final Map<String, dynamic> event;
   const _NearbyEventCard({required this.event});
 
-  String _formatDate(String? dateStr) {
+  String _formatDate(String? dateStr, String? timeStr) {
     if (dateStr == null || dateStr.isEmpty) return 'TBD';
     try {
       final dt = DateTime.parse(dateStr);
       final now = DateTime.now();
       final diff = dt.difference(DateTime(now.year, now.month, now.day));
-      final timeStr =
-          '${dt.hour > 12 ? dt.hour - 12 : dt.hour}:${dt.minute.toString().padLeft(2, '0')} ${dt.hour >= 12 ? 'PM' : 'AM'}';
-      if (diff.inDays == 0) return 'Tonight, $timeStr';
-      if (diff.inDays == 1) return 'Tomorrow, $timeStr';
-      return '${_months[dt.month - 1]} ${dt.day}, $timeStr';
+      
+      String displayTime = '00:00 AM';
+      if (timeStr != null && timeStr.isNotEmpty) {
+        final parts = timeStr.split(':');
+        if (parts.length >= 2) {
+          final h = int.parse(parts[0]);
+          final m = int.parse(parts[1]);
+          displayTime = '${h > 12 ? h - 12 : (h == 0 ? 12 : h)}:${m.toString().padLeft(2, '0')} ${h >= 12 ? 'PM' : 'AM'}';
+        }
+      }
+
+      if (diff.inDays == 0) return 'Tonight, $displayTime';
+      if (diff.inDays == 1) return 'Tomorrow, $displayTime';
+      return '${_months[dt.month - 1]} ${dt.day}, $displayTime';
     } catch (_) {
       return dateStr;
     }
@@ -526,7 +612,7 @@ class _NearbyEventCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final title = event['title'] as String? ?? 'Event';
     final sport = event['sports']?['name'] as String? ?? 'Sport';
-    final date = _formatDate(event['event_date'] as String?);
+    final date = _formatDate(event['event_date'] as String?, event['start_time'] as String?);
     final maxP = event['max_participants'] as int? ?? 10;
     final skillLevel = event['required_level'] as String? ?? 'Any';
 
@@ -546,22 +632,26 @@ class _NearbyEventCard extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
               child: Row(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0052FF).withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      '${sport.toUpperCase()} • ${skillLevel.toUpperCase()}',
-                      style: const TextStyle(
-                          color: Color(0xFF4D9DFF),
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 0.3),
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0052FF).withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '${sport.toUpperCase()} • ${skillLevel.toUpperCase()}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            color: Color(0xFF4D9DFF),
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.3),
+                      ),
                     ),
                   ),
-                  const Spacer(),
+                  const SizedBox(width: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
