@@ -18,8 +18,14 @@ final eventRosterProvider =
   final response = await Supabase.instance.client
       .from('event_participants')
       .select('user_id, profiles(full_name, trust_score, avatar_url)')
-      .eq('event_id', eventId);
+      .eq('event_id', eventId)
+      .eq('status', 'joined'); // Only show approved members in roster
   return List<Map<String, dynamic>>.from(response);
+});
+
+final joinRequestsProvider =
+    FutureProvider.autoDispose.family<List<Map<String, dynamic>>, String>((ref, eventId) async {
+  return await ref.read(eventRepositoryProvider).getJoinRequests(eventId);
 });
 
 // ── Event Detail Screen ────────────────────────────────────────────
@@ -34,27 +40,34 @@ class EventDetailScreen extends ConsumerStatefulWidget {
 
 class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
   bool _isJoining = false;
-  bool _hasJoined = false;
+  String? _participantStatus;
 
   @override
   void initState() {
     super.initState();
-    _checkIfAlreadyJoined();
+    _checkParticipantStatus();
   }
 
-  Future<void> _checkIfAlreadyJoined() async {
+  Future<void> _checkParticipantStatus() async {
     final eventId = widget.event['id']?.toString() ?? '';
     if (eventId.isEmpty) return;
-    final joined = await ref.read(eventRepositoryProvider).isAlreadyJoined(eventId);
-    if (mounted) setState(() => _hasJoined = joined);
+    final status = await ref.read(eventRepositoryProvider).getParticipantStatus(eventId);
+    if (mounted) setState(() => _participantStatus = status);
   }
 
   Future<void> _joinEvent() async {
     setState(() => _isJoining = true);
     try {
       await ref.read(eventRepositoryProvider).joinEvent(widget.event['id'].toString());
-      setState(() => _hasJoined = true);
-      if (mounted) _showShareBottomSheet();
+      if (mounted) {
+        setState(() => _participantStatus = 'pending');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Join request sent! Waiting for host approval.'),
+            backgroundColor: Color(0xFF0052FF),
+          ),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -199,6 +212,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     final isHost = currentUser != null && currentUser.id == hostId;
 
     final rosterAsync = ref.watch(eventRosterProvider(eventId));
+    final requestsAsync = isHost ? ref.watch(joinRequestsProvider(eventId)) : null;
 
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
@@ -238,7 +252,6 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ── Hero Image ──
                   _HeroSection(sport: sport, sportIcon: _sportIcon(sport), gradientColor: _sportGradient(sport)),
 
                   Padding(
@@ -246,7 +259,6 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // ── Tags ──
                         Row(
                           children: [
                             _Badge(label: sport, color: const Color(0xFF0052FF)),
@@ -256,13 +268,11 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                         ),
                         const SizedBox(height: 14),
 
-                        // ── Title ──
                         Text(title,
                             style: const TextStyle(
                                 color: Colors.white, fontWeight: FontWeight.w900, fontSize: 26)),
                         const SizedBox(height: 10),
 
-                        // ── Date & Price ──
                         Row(
                           children: [
                             const Icon(Icons.calendar_today_outlined, size: 14, color: Colors.white54),
@@ -278,7 +288,6 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                         const SizedBox(height: 28),
                         const _Divider(),
 
-                        // ── About ──
                         const SizedBox(height: 20),
                         const Text('About the Event',
                             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17)),
@@ -292,7 +301,6 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                         const SizedBox(height: 24),
                         const _Divider(),
 
-                        // ── Location ──
                         const SizedBox(height: 20),
                         const Text('Location',
                             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17)),
@@ -306,7 +314,6 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                         const SizedBox(height: 24),
                         const _Divider(),
 
-                        // ── Hosted By ──
                         const SizedBox(height: 20),
                         const Text('Hosted By',
                             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17)),
@@ -316,10 +323,27 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                             avatarUrl: hostAvatar,
                             trustScore: hostTrust),
 
+                        if (isHost) ...[
+                          const SizedBox(height: 24),
+                          const _Divider(),
+                          const SizedBox(height: 20),
+                          requestsAsync?.when(
+                                loading: () => const SizedBox(),
+                                error: (_, __) => const SizedBox(),
+                                data: (requests) => _JoinRequestsSection(
+                                  requests: requests,
+                                  onUpdate: () {
+                                    ref.invalidate(joinRequestsProvider(eventId));
+                                    ref.invalidate(eventRosterProvider(eventId));
+                                  },
+                                ),
+                              ) ??
+                              const SizedBox(),
+                        ],
+
                         const SizedBox(height: 24),
                         const _Divider(),
 
-                        // ── Roster ──
                         const SizedBox(height: 20),
                         rosterAsync.when(
                           loading: () => const SizedBox(),
@@ -339,11 +363,10 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
             ),
           ),
 
-          // ── Bottom CTA ──
           _BottomCta(
             event: widget.event,
             isHost: isHost,
-            hasJoined: _hasJoined,
+            participantStatus: _participantStatus,
             isJoining: _isJoining,
             onJoin: _joinEvent,
           ),
@@ -376,7 +399,6 @@ class _HeroSection extends StatelessWidget {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // Glow circle
           Container(
             width: 160,
             height: 160,
@@ -387,14 +409,11 @@ class _HeroSection extends StatelessWidget {
               ),
             ),
           ),
-          // Sport icon big
           Icon(sportIcon, size: 80, color: Colors.white.withOpacity(0.08)),
-          // Spotlight lines (decorative)
           CustomPaint(
             size: const Size(double.infinity, 240),
             painter: _SpotlightPainter(),
           ),
-          // Centered sport icon
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -417,7 +436,6 @@ class _SpotlightPainter extends CustomPainter {
       ..color = Colors.white.withOpacity(0.03)
       ..strokeWidth = 1;
     for (var i = 0; i < 6; i++) {
-      final angle = (i * 60.0) * (3.14159 / 180);
       final dx = size.width / 2 + 200 * (i % 2 == 0 ? 1 : -1);
       canvas.drawLine(
         Offset(size.width / 2, 0),
@@ -459,7 +477,6 @@ class _LocationCard extends StatelessWidget {
         throw 'Could not open the map.';
       }
     } catch (e) {
-      // Fallback for web or if apps aren't found
       final webUrl = 'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng';
       await launchUrl(Uri.parse(webUrl), mode: LaunchMode.externalApplication);
     }
@@ -617,6 +634,108 @@ class _HostCard extends StatelessWidget {
   }
 }
 
+// ── Join Requests Section ─────────────────────────────────────────
+
+class _JoinRequestsSection extends ConsumerWidget {
+  final List<Map<String, dynamic>> requests;
+  final VoidCallback onUpdate;
+
+  const _JoinRequestsSection({super.key, required this.requests, required this.onUpdate});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (requests.isEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Join Requests',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17)),
+          const SizedBox(height: 14),
+          Text('No pending requests.',
+              style: TextStyle(color: Colors.white.withOpacity(0.35), fontSize: 13)),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Text('Join Requests',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17)),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0052FF).withOpacity(0.2),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text('${requests.length}',
+                  style: const TextStyle(color: Color(0xFF4D9DFF), fontWeight: FontWeight.bold, fontSize: 11)),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        ...requests.map((request) {
+          final profile = request['profiles'] as Map<String, dynamic>?;
+          final name = profile?['full_name'] as String? ?? 'Player';
+          final avatarUrl = profile?['avatar_url'] as String?;
+          final userId = request['user_id'] as String;
+          final eventId = request['event_id'] as String;
+
+          return Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1A1A1A),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white.withOpacity(0.06)),
+            ),
+            child: Row(
+              children: [
+                AvatarWidget(name: name, radius: 20, avatarUrl: avatarUrl, editable: false),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(name,
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                      const SizedBox(height: 2),
+                      Text('${profile?['trust_score'] ?? 100} Trust Score',
+                          style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11)),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: () async {
+                    await ref.read(eventRepositoryProvider).updateJoinStatus(eventId, userId, 'rejected');
+                    onUpdate();
+                  },
+                  icon: const Icon(Icons.close, color: Colors.redAccent, size: 20),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  onPressed: () async {
+                    await ref.read(eventRepositoryProvider).updateJoinStatus(eventId, userId, 'joined');
+                    onUpdate();
+                  },
+                  icon: const Icon(Icons.check, color: MatchFitTheme.accentGreen, size: 20),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
+          );
+        }),
+      ],
+    );
+  }
+}
+
 // ── Roster Section ────────────────────────────────────────────────
 
 class _RosterSection extends StatelessWidget {
@@ -682,30 +801,7 @@ class _RosterSection extends StatelessWidget {
               ),
             );
           }),
-        const SizedBox(height: 4),
-        Row(
-          children: [
-            _AddPlayerBtn(),
-            const SizedBox(width: 10),
-            _AddPlayerBtn(),
-          ],
-        ),
       ],
-    );
-  }
-}
-
-class _AddPlayerBtn extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 42, height: 42,
-      decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withOpacity(0.1), style: BorderStyle.solid),
-      ),
-      child: const Icon(Icons.person_add_outlined, color: Colors.white38, size: 18),
     );
   }
 }
@@ -715,14 +811,14 @@ class _AddPlayerBtn extends StatelessWidget {
 class _BottomCta extends StatelessWidget {
   final Map<String, dynamic> event;
   final bool isHost;
-  final bool hasJoined;
+  final String? participantStatus;
   final bool isJoining;
   final VoidCallback onJoin;
 
   const _BottomCta({
     required this.event,
     required this.isHost,
-    required this.hasJoined,
+    this.participantStatus,
     required this.isJoining,
     required this.onJoin,
   });
@@ -771,11 +867,11 @@ class _BottomCta extends StatelessWidget {
           : SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: hasJoined || isJoining ? null : onJoin,
+                onPressed: (participantStatus != null || isJoining) ? null : onJoin,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: hasJoined ? const Color(0xFF1A1A1A) : const Color(0xFF0052FF),
-                  foregroundColor: hasJoined ? Colors.white54 : Colors.white,
-                  disabledBackgroundColor: hasJoined ? const Color(0xFF1A1A1A) : const Color(0xFF0052FF).withOpacity(0.5),
+                  backgroundColor: _getBtnColor(),
+                  foregroundColor: _getBtnTextColor(),
+                  disabledBackgroundColor: _getBtnColor().withOpacity(0.5),
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
                   elevation: 0,
@@ -783,14 +879,42 @@ class _BottomCta extends StatelessWidget {
                 icon: isJoining
                     ? const SizedBox(width: 18, height: 18,
                         child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                    : Icon(hasJoined ? Icons.check_circle_outline : Icons.send_outlined, size: 18),
+                    : Icon(_getIcon(), size: 18),
                 label: Text(
-                  hasJoined ? 'Joined ✓' : 'Send Join Request',
-                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, letterSpacing: 0.3),
+                  _getLabel(),
+                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, letterSpacing: 0.5),
                 ),
               ),
             ),
     );
+  }
+
+  Color _getBtnColor() {
+    if (participantStatus == 'joined') return const Color(0xFF1A1A1A);
+    if (participantStatus == 'pending') return const Color(0xFF242424);
+    if (participantStatus == 'rejected') return Colors.red.withOpacity(0.1);
+    return const Color(0xFF0052FF);
+  }
+
+  Color _getBtnTextColor() {
+    if (participantStatus == 'joined') return Colors.white54;
+    if (participantStatus == 'pending') return Colors.white54;
+    if (participantStatus == 'rejected') return Colors.redAccent;
+    return Colors.white;
+  }
+
+  IconData _getIcon() {
+    if (participantStatus == 'joined') return Icons.check_circle_outline;
+    if (participantStatus == 'pending') return Icons.hourglass_empty;
+    if (participantStatus == 'rejected') return Icons.block_flipped;
+    return Icons.send_outlined;
+  }
+
+  String _getLabel() {
+    if (participantStatus == 'joined') return 'JOINED';
+    if (participantStatus == 'pending') return 'REQUEST SENT';
+    if (participantStatus == 'rejected') return 'REJECTED';
+    return 'JOIN EVENT';
   }
 }
 
