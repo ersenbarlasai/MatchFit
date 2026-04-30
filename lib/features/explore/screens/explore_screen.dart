@@ -34,6 +34,7 @@ final exploreSportProvider = NotifierProvider<ExploreSportNotifier, String>(Expl
 final exploreMatchesProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
   final userLoc = ref.watch(userLocationProvider).value;
   final distanceStr = ref.watch(exploreDistanceProvider);
+  final selectedSport = ref.watch(exploreSportProvider);
   
   double radius = 50000; // Default 50km
   if (distanceStr == '< 5km') radius = 5000;
@@ -41,11 +42,18 @@ final exploreMatchesProvider = FutureProvider.autoDispose<List<Map<String, dynam
   if (distanceStr == '< 20km') radius = 20000;
   if (distanceStr == 'Any') radius = 100000;
 
-  return await ref.read(eventRepositoryProvider).getNearbyEvents(
+  final allEvents = await ref.read(eventRepositoryProvider).getNearbyEvents(
     lat: userLoc?.latitude,
     lng: userLoc?.longitude,
     radius: radius,
   );
+
+  if (selectedSport == 'All') return allEvents;
+  
+  return allEvents.where((e) {
+    final sName = e['sports']?['name'] as String? ?? '';
+    return sName.toLowerCase() == selectedSport.toLowerCase();
+  }).toList();
 });
 
 // ── Explore Screen ─────────────────────────────────────────────────
@@ -431,8 +439,8 @@ class _MapSection extends ConsumerWidget {
             ),
             children: [
               TileLayer(
-                urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                subdomains: const ['a', 'b', 'c'],
+                urlTemplate: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+                subdomains: const ['a', 'b', 'c', 'd'],
                 userAgentPackageName: 'com.matchfit.app',
               ),
               if (userLoc != null && radiusInMeters > 0)
