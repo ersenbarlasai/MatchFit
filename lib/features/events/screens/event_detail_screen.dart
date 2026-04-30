@@ -710,8 +710,21 @@ class _JoinRequestsSection extends ConsumerWidget {
                 ),
                 IconButton(
                   onPressed: () async {
-                    await ref.read(eventRepositoryProvider).updateJoinStatus(eventId, userId, 'rejected');
-                    onUpdate();
+                    try {
+                      await ref.read(eventRepositoryProvider).updateJoinStatus(eventId, userId, 'rejected');
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Request rejected'), backgroundColor: Colors.orange),
+                        );
+                        onUpdate();
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+                        );
+                      }
+                    }
                   },
                   icon: const Icon(Icons.close, color: Colors.redAccent, size: 20),
                   padding: EdgeInsets.zero,
@@ -720,8 +733,21 @@ class _JoinRequestsSection extends ConsumerWidget {
                 const SizedBox(width: 8),
                 IconButton(
                   onPressed: () async {
-                    await ref.read(eventRepositoryProvider).updateJoinStatus(eventId, userId, 'joined');
-                    onUpdate();
+                    try {
+                      await ref.read(eventRepositoryProvider).updateJoinStatus(eventId, userId, 'joined');
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Player approved!'), backgroundColor: MatchFitTheme.accentGreen),
+                        );
+                        onUpdate();
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+                        );
+                      }
+                    }
                   },
                   icon: const Icon(Icons.check, color: MatchFitTheme.accentGreen, size: 20),
                   padding: EdgeInsets.zero,
