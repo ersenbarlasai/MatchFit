@@ -10,6 +10,7 @@ import '../features/events/screens/event_detail_screen.dart';
 import '../features/explore/screens/explore_screen.dart';
 import '../features/guardian/screens/privacy_settings_screen.dart';
 import '../features/content/screens/share_event_post_screen.dart';
+import '../features/events/screens/edit_event_screen.dart';
 import '../features/profile/screens/profile_screen.dart';
 import '../core/widgets/main_shell.dart';
 
@@ -47,6 +48,13 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) {
         final event = state.extra as Map<String, dynamic>;
         return ShareEventPostScreen(event: event);
+      },
+    ),
+    GoRoute(
+      path: '/edit-event',
+      builder: (context, state) {
+        final event = state.extra as Map<String, dynamic>;
+        return EditEventScreen(event: event);
       },
     ),
   ],

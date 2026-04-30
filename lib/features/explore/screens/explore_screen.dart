@@ -528,7 +528,7 @@ class _NearbyEventCard extends StatelessWidget {
     final sport = event['sports']?['name'] as String? ?? 'Sport';
     final date = _formatDate(event['event_date'] as String?);
     final maxP = event['max_participants'] as int? ?? 10;
-    final skillLevel = event['skill_level'] as String? ?? '5v5';
+    final skillLevel = event['required_level'] as String? ?? 'Any';
 
     return GestureDetector(
       onTap: () => context.push('/event-detail', extra: event),

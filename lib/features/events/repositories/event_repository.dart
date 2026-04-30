@@ -10,6 +10,14 @@ class EventRepository {
     await _supabase.from('events').insert(eventData);
   }
 
+  Future<void> updateEvent(String eventId, Map<String, dynamic> eventData) async {
+    await _supabase.from('events').update(eventData).eq('id', eventId);
+  }
+
+  Future<void> deleteEvent(String eventId) async {
+    await _supabase.from('events').delete().eq('id', eventId);
+  }
+
   Future<List<Map<String, dynamic>>> getNearbyEvents() async {
     // For MVP, we just fetch all open events
     final response = await _supabase

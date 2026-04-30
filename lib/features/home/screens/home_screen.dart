@@ -385,7 +385,7 @@ class EventCard extends StatelessWidget {
     final date = event['event_date'] as String? ?? '';
     final hostName = event['profiles']?['full_name'] as String? ?? 'Host';
     final maxParticipants = event['max_participants'] as int? ?? 10;
-    final skillLevel = event['skill_level'] as String? ?? 'All Levels';
+    final skillLevel = event['required_level'] as String? ?? 'All Levels';
 
     return GestureDetector(
       onTap: () => context.push('/event-detail', extra: event),
@@ -424,7 +424,7 @@ class EventCard extends StatelessWidget {
                       children: [
                         Icon(_sportIcon(sport), size: 12, color: MatchFitTheme.accentGreen),
                         const SizedBox(width: 4),
-                        Text(sport,
+                        Text('$sport • $skillLevel',
                             style: const TextStyle(
                                 color: MatchFitTheme.accentGreen,
                                 fontSize: 11,

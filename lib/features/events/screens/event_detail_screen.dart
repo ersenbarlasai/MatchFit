@@ -181,7 +181,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     final hostAvatar = hostProfile?['avatar_url'] as String?;
     final hostTrust = hostProfile?['trust_score'] as int? ?? 100;
     final maxP = widget.event['max_participants'] as int? ?? 10;
-    final skillLevel = widget.event['skill_level'] as String? ?? 'Open';
+    final skillLevel = widget.event['required_level'] as String? ?? 'Open';
     final eventId = widget.event['id']?.toString() ?? '';
     final hostId = widget.event['host_id'] as String? ?? '';
     final currentUser = ref.read(authRepositoryProvider).currentUser;
@@ -326,6 +326,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
 
           // ── Bottom CTA ──
           _BottomCta(
+            event: widget.event,
             isHost: isHost,
             hasJoined: _hasJoined,
             isJoining: _isJoining,
@@ -634,12 +635,14 @@ class _AddPlayerBtn extends StatelessWidget {
 // ── Bottom CTA ────────────────────────────────────────────────────
 
 class _BottomCta extends StatelessWidget {
+  final Map<String, dynamic> event;
   final bool isHost;
   final bool hasJoined;
   final bool isJoining;
   final VoidCallback onJoin;
 
   const _BottomCta({
+    required this.event,
     required this.isHost,
     required this.hasJoined,
     required this.isJoining,
@@ -655,27 +658,37 @@ class _BottomCta extends StatelessWidget {
         border: Border(top: BorderSide(color: Colors.white.withOpacity(0.07))),
       ),
       child: isHost
-          ? Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF0052FF).withOpacity(0.12),
-                borderRadius: BorderRadius.circular(28),
-                border: Border.all(color: const Color(0xFF0052FF).withOpacity(0.4)),
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.shield_outlined, color: Color(0xFF4D9DFF), size: 18),
-                  SizedBox(width: 8),
-                  Text("You're the Host",
-                      style: TextStyle(
-                          color: Color(0xFF4D9DFF),
-                          fontWeight: FontWeight.w900,
-                          fontSize: 15,
-                          letterSpacing: 0.5)),
-                ],
-              ),
+          ? Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => context.push('/edit-event', extra: event),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1A1A1A),
+                      foregroundColor: MatchFitTheme.accentGreen,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(28),
+                        side: BorderSide(color: MatchFitTheme.accentGreen.withOpacity(0.5)),
+                      ),
+                      elevation: 0,
+                    ),
+                    icon: const Icon(Icons.edit_outlined, size: 18),
+                    label: const Text('Edit Event',
+                        style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15, letterSpacing: 0.5)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1A1A1A),
+                    borderRadius: BorderRadius.circular(28),
+                    border: Border.all(color: Colors.white.withOpacity(0.1)),
+                  ),
+                  child: const Icon(Icons.more_horiz, color: Colors.white54),
+                ),
+              ],
             )
           : SizedBox(
               width: double.infinity,
