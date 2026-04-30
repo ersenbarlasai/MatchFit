@@ -3,7 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:matchfit/core/theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:matchfit/core/widgets/initials_avatar.dart';
+import 'package:matchfit/core/widgets/avatar_widget.dart';
+import 'package:matchfit/core/providers/profile_provider.dart';
 import '../../events/repositories/event_repository.dart';
 import '../../auth/repositories/auth_repository.dart';
 
@@ -11,16 +12,6 @@ import '../../auth/repositories/auth_repository.dart';
 
 final eventsProvider = FutureProvider.autoDispose((ref) async {
   return ref.read(eventRepositoryProvider).getNearbyEvents();
-});
-
-final homeProfileProvider = FutureProvider.autoDispose((ref) async {
-  final user = ref.read(authRepositoryProvider).currentUser;
-  if (user == null) return null;
-  return await Supabase.instance.client
-      .from('profiles')
-      .select('full_name, trust_score')
-      .eq('id', user.id)
-      .maybeSingle();
 });
 
 final weeklyStatsProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) async {
@@ -61,24 +52,13 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final eventsAsync = ref.watch(eventsProvider);
-    final profileAsync = ref.watch(homeProfileProvider);
+    final profileAsync = ref.watch(currentUserProfileProvider);
     final statsAsync = ref.watch(weeklyStatsProvider);
 
     final firstName = profileAsync.when(
       data: (p) => (p?['full_name'] as String? ?? 'Player').split(' ').first,
       loading: () => '...',
       error: (_, __) => 'Player',
-    );
-    final initials = profileAsync.when(
-      data: (p) {
-        final name = p?['full_name'] as String? ?? 'P';
-        final parts = name.trim().split(' ').where((s) => s.isNotEmpty).toList();
-        if (parts.isEmpty) return '?';
-        if (parts.length == 1) return parts[0][0].toUpperCase();
-        return '${parts[0][0]}${parts[parts.length - 1][0]}'.toUpperCase();
-      },
-      loading: () => '?',
-      error: (_, __) => '?',
     );
 
     return Scaffold(
@@ -95,7 +75,7 @@ class HomeScreen extends ConsumerWidget {
         color: MatchFitTheme.accentGreen,
         onRefresh: () async {
           ref.refresh(eventsProvider);
-          ref.refresh(homeProfileProvider);
+          ref.refresh(currentUserProfileProvider);
           ref.refresh(weeklyStatsProvider);
         },
         child: CustomScrollView(
@@ -109,22 +89,16 @@ class HomeScreen extends ConsumerWidget {
                   child: Row(
                     children: [
                       GestureDetector(
-                        onTap: () => context.push('/profile'),
-                        child: Container(
-                          width: 46,
-                          height: 46,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(color: MatchFitTheme.accentGreen, width: 2),
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF0052FF), Color(0xFF003DB0)],
-                            ),
+                        onTap: () => context.go('/profile'),
+                        child: profileAsync.when(
+                          data: (p) => AvatarWidget(
+                            name: p?['full_name'] ?? 'P',
+                            avatarUrl: p?['avatar_url'],
+                            radius: 21,
+                            editable: false,
                           ),
-                          child: Center(
-                            child: Text(initials,
-                                style: const TextStyle(
-                                    color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
-                          ),
+                          loading: () => const CircleAvatar(radius: 21, backgroundColor: Color(0xFF1E1E1E)),
+                          error: (_, __) => const CircleAvatar(radius: 21, backgroundColor: Color(0xFF1E1E1E)),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -497,7 +471,12 @@ class EventCard extends StatelessWidget {
                   // Bottom row: avatars + Join
                   Row(
                     children: [
-                      InitialsAvatar(name: hostName, radius: 13, fontSize: 9),
+                      AvatarWidget(
+                        name: hostName,
+                        radius: 13,
+                        avatarUrl: event['profiles']?['avatar_url'],
+                        editable: false,
+                      ),
                       const SizedBox(width: 4),
                       Container(
                         width: 26,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:matchfit/core/theme.dart';
+import 'package:matchfit/core/widgets/avatar_widget.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:math' as math;
 import '../../auth/repositories/auth_repository.dart';
@@ -13,7 +14,7 @@ final profileDataProvider = FutureProvider.autoDispose<Map<String, dynamic>>((re
   if (user == null) return {};
   final sb = Supabase.instance.client;
 
-  final profile = await sb.from('profiles').select('full_name, trust_score').eq('id', user.id).maybeSingle();
+  final profile = await sb.from('profiles').select('full_name, trust_score, avatar_url').eq('id', user.id).maybeSingle();
   final hosted = await sb.from('events').select('id, status').eq('host_id', user.id);
   final joined = await sb.from('event_participants').select('id').eq('user_id', user.id);
   final posts  = await sb.from('posts').select('id').eq('user_id', user.id);
@@ -25,6 +26,8 @@ final profileDataProvider = FutureProvider.autoDispose<Map<String, dynamic>>((re
   return {
     'full_name': profile?['full_name'] ?? 'Player',
     'trust_score': profile?['trust_score'] ?? 100,
+    'avatar_url': profile?['avatar_url'] as String? ?? '',
+    'user_id': user.id,
     'events_joined': (joined as List).length,
     'events_hosted': hostedList.length,
     'completion_pct': completionPct,
@@ -44,6 +47,7 @@ class ProfileScreen extends ConsumerStatefulWidget {
 class _ProfileScreenState extends ConsumerState<ProfileScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
+  String? _avatarUrl;
 
   @override
   void initState() {
@@ -84,6 +88,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     final joined = data['events_joined'] as int;
     final hosted = data['events_hosted'] as int;
     final completion = data['completion_pct'] as int;
+    final userId = data['user_id'] as String? ?? '';
+    // Use local state if user already changed avatar, else use DB value
+    final avatarUrl = _avatarUrl ?? (data['avatar_url'] as String? ?? '');
 
     return NestedScrollView(
       headerSliverBuilder: (context, _) => [
@@ -115,48 +122,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           child: Column(
             children: [
               const SizedBox(height: 8),
-              // ── Avatar ──
-              Stack(
-                alignment: Alignment.bottomCenter,
-                children: [
-                  Container(
-                    width: 92,
-                    height: 92,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: MatchFitTheme.accentGreen, width: 3),
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF0052FF), Color(0xFF003DB0)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                    ),
-                    child: Center(
-                      child: Text(
-                        _initials(name),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 30,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    bottom: 2,
-                    right: 2,
-                    child: Container(
-                      width: 22,
-                      height: 22,
-                      decoration: BoxDecoration(
-                        color: MatchFitTheme.accentGreen,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: const Color(0xFF121212), width: 2),
-                      ),
-                      child: const Icon(Icons.verified, size: 12, color: Colors.black),
-                    ),
-                  ),
-                ],
+              // ── Avatar (editable) ──
+              AvatarWidget(
+                name: name,
+                radius: 46,
+                avatarUrl: avatarUrl.isNotEmpty ? avatarUrl : null,
+                editable: true,
+                userId: userId,
+                onUploaded: (url) => setState(() => _avatarUrl = url),
               ),
               const SizedBox(height: 14),
               // Name

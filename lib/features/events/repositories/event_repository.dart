@@ -14,7 +14,7 @@ class EventRepository {
     // For MVP, we just fetch all open events
     final response = await _supabase
         .from('events')
-        .select('*, sports(name), profiles(full_name, trust_score)')
+        .select('*, sports(name), profiles(full_name, trust_score, avatar_url)')
         .eq('status', 'open')
         .order('event_date', ascending: true);
     return List<Map<String, dynamic>>.from(response);

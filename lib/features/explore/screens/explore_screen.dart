@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:matchfit/core/theme.dart';
+import 'package:matchfit/core/widgets/avatar_widget.dart';
+import 'package:matchfit/core/providers/profile_provider.dart';
 import 'dart:math' as math;
 import '../../matchmaker/repositories/matchmaker_repository.dart';
 import '../../auth/repositories/auth_repository.dart';
@@ -43,6 +45,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
   @override
   Widget build(BuildContext context) {
     final matchesAsync = ref.watch(exploreMatchesProvider);
+    final profileAsync = ref.watch(currentUserProfileProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
@@ -57,21 +60,15 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                 children: [
                   GestureDetector(
                     onTap: () => context.push('/profile'),
-                    child: Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(color: MatchFitTheme.accentGreen, width: 2),
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF0052FF), Color(0xFF003DB0)],
-                        ),
+                    child: profileAsync.when(
+                      data: (p) => AvatarWidget(
+                        name: p?['full_name'] ?? 'P',
+                        avatarUrl: p?['avatar_url'],
+                        radius: 21,
+                        editable: false,
                       ),
-                      child: const Center(
-                        child: Text('E',
-                            style: TextStyle(
-                                color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                      ),
+                      loading: () => const CircleAvatar(radius: 21, backgroundColor: Color(0xFF1E1E1E)),
+                      error: (_, __) => const CircleAvatar(radius: 21, backgroundColor: Color(0xFF1E1E1E)),
                     ),
                   ),
                   const SizedBox(width: 12),

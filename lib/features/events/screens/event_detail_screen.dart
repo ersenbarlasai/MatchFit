@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:matchfit/core/theme.dart';
-import 'package:matchfit/core/widgets/initials_avatar.dart';
+import 'package:matchfit/core/widgets/avatar_widget.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../repositories/event_repository.dart';
 import '../../auth/repositories/auth_repository.dart';
@@ -13,7 +13,7 @@ final eventRosterProvider =
     FutureProvider.autoDispose.family<List<Map<String, dynamic>>, String>((ref, eventId) async {
   final response = await Supabase.instance.client
       .from('event_participants')
-      .select('user_id, profiles(full_name, trust_score)')
+      .select('user_id, profiles(full_name, trust_score, avatar_url)')
       .eq('event_id', eventId);
   return List<Map<String, dynamic>>.from(response);
 });
@@ -176,8 +176,10 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     final description = widget.event['description'] as String? ?? 'No description available.';
     final location = widget.event['location_name'] as String? ?? widget.event['location_text'] as String? ?? 'Location TBD';
     final date = _formatDate(widget.event['event_date'] as String?);
-    final hostName = widget.event['profiles']?['full_name'] as String? ?? 'Host';
-    final hostTrust = widget.event['profiles']?['trust_score'] as int? ?? 100;
+    final hostProfile = widget.event['profiles'] as Map<String, dynamic>?;
+    final hostName = hostProfile?['full_name'] as String? ?? 'Host';
+    final hostAvatar = hostProfile?['avatar_url'] as String?;
+    final hostTrust = hostProfile?['trust_score'] as int? ?? 100;
     final maxP = widget.event['max_participants'] as int? ?? 10;
     final skillLevel = widget.event['skill_level'] as String? ?? 'Open';
     final eventId = widget.event['id']?.toString() ?? '';
@@ -296,6 +298,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                         const SizedBox(height: 12),
                         _HostCard(
                             hostName: hostName,
+                            avatarUrl: hostAvatar,
                             trustScore: hostTrust),
 
                         const SizedBox(height: 24),
@@ -483,8 +486,9 @@ class _LocationCard extends StatelessWidget {
 
 class _HostCard extends StatelessWidget {
   final String hostName;
+  final String? avatarUrl;
   final int trustScore;
-  const _HostCard({required this.hostName, required this.trustScore});
+  const _HostCard({required this.hostName, this.avatarUrl, required this.trustScore});
 
   @override
   Widget build(BuildContext context) {
@@ -500,7 +504,7 @@ class _HostCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              InitialsAvatar(name: hostName, radius: 22),
+              AvatarWidget(name: hostName, radius: 22, avatarUrl: avatarUrl, editable: false),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(hostName,
@@ -565,6 +569,7 @@ class _RosterSection extends StatelessWidget {
           ...roster.asMap().entries.map((e) {
             final profile = e.value['profiles'] as Map<String, dynamic>?;
             final name = profile?['full_name'] as String? ?? 'Player';
+            final avatarUrl = profile?['avatar_url'] as String?;
             final pos = _positions[e.key % _positions.length];
             return Container(
               margin: const EdgeInsets.only(bottom: 10),
@@ -576,7 +581,7 @@ class _RosterSection extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  InitialsAvatar(name: name, radius: 18, fontSize: 12),
+                  AvatarWidget(name: name, radius: 18, avatarUrl: avatarUrl, editable: false),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(name,
