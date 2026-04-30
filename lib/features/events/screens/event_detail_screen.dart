@@ -7,6 +7,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../repositories/event_repository.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'dart:io' show Platform;
 import '../../auth/repositories/auth_repository.dart';
 
 // ── Roster Provider ────────────────────────────────────────────────
@@ -437,97 +439,122 @@ class _LocationCard extends StatelessWidget {
   final double? lng;
   const _LocationCard({required this.location, this.lat, this.lng});
 
+  Future<void> _openMap() async {
+    if (lat == null || lng == null) return;
+    
+    final googleUrl = 'https://www.google.com/maps/search/?api=1&query=$lat,$lng';
+    final appleUrl = 'https://maps.apple.com/?q=$lat,$lng';
+    
+    try {
+      if (Platform.isIOS) {
+        if (await canLaunchUrl(Uri.parse(appleUrl))) {
+          await launchUrl(Uri.parse(appleUrl));
+          return;
+        }
+      }
+      
+      if (await canLaunchUrl(Uri.parse(googleUrl))) {
+        await launchUrl(Uri.parse(googleUrl), mode: LaunchMode.externalApplication);
+      } else {
+        throw 'Could not open the map.';
+      }
+    } catch (e) {
+      // Fallback for web or if apps aren't found
+      final webUrl = 'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng';
+      await launchUrl(Uri.parse(webUrl), mode: LaunchMode.externalApplication);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.07)),
-      ),
-      child: Column(
-        children: [
-          // Mini map preview
-          Container(
-            height: 120,
-            decoration: const BoxDecoration(
-              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: (lat != null && lng != null)
-                ? FlutterMap(
-                    options: MapOptions(
-                      initialCenter: LatLng(lat!, lng!),
-                      initialZoom: 14.0,
-                      interactionOptions: const InteractionOptions(flags: InteractiveFlag.none),
-                    ),
-                    children: [
-                      TileLayer(
-                        urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        userAgentPackageName: 'com.matchfit.app',
+    return GestureDetector(
+      onTap: _openMap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1A1A),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white.withOpacity(0.07)),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            SizedBox(
+              height: 140,
+              child: (lat != null && lng != null)
+                  ? FlutterMap(
+                      options: MapOptions(
+                        initialCenter: LatLng(lat!, lng!),
+                        initialZoom: 14.0,
+                        interactionOptions: const InteractionOptions(flags: InteractiveFlag.none),
                       ),
-                      MarkerLayer(
-                        markers: [
-                          Marker(
-                            point: LatLng(lat!, lng!),
-                            width: 40,
-                            height: 40,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: MatchFitTheme.accentGreen,
-                                shape: BoxShape.circle,
-                                border: Border.all(color: Colors.black, width: 2),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: MatchFitTheme.accentGreen.withOpacity(0.5),
-                                    blurRadius: 10,
-                                  ),
-                                ],
+                      children: [
+                        TileLayer(
+                          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                          userAgentPackageName: 'com.matchfit.app',
+                        ),
+                        MarkerLayer(
+                          markers: [
+                            Marker(
+                              point: LatLng(lat!, lng!),
+                              width: 40,
+                              height: 40,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: MatchFitTheme.accentGreen,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: Colors.black, width: 2),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: MatchFitTheme.accentGreen.withOpacity(0.5),
+                                      blurRadius: 10,
+                                    ),
+                                  ],
+                                ),
+                                child: const Icon(Icons.location_on, color: Colors.black, size: 20),
                               ),
-                              child: const Icon(Icons.location_on, color: Colors.black, size: 20),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
+                      ],
+                    )
+                  : Container(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Color(0xFF0A1628), Color(0xFF0D1F3C)],
+                        ),
                       ),
-                    ],
-                  )
-                : Container(
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Color(0xFF0A1628), Color(0xFF0D1F3C)],
+                      child: const Center(
+                        child: Icon(Icons.map_outlined, color: Colors.white24, size: 32),
                       ),
                     ),
-                    child: const Center(
-                      child: Icon(Icons.map_outlined, color: Colors.white24, size: 32),
-                    ),
-                  ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(14),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(location,
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13, height: 1.4)),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.06),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.navigation_outlined, color: Colors.white54, size: 18),
-                ),
-              ],
             ),
-          ),
-        ],
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(location,
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13, height: 1.4)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.06),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.navigation_outlined, color: Colors.white54, size: 18),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
