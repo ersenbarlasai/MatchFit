@@ -1,0 +1,64 @@
+# MatchFit Agent Configuration (.agents)
+
+This file defines the core autonomous agents that govern the MatchFit platform. Each agent acts as a microservice intelligence, maintaining its own context and executing specific domain logic.
+
+---
+
+## 1. @Matchmaker (Eşleşme Uzmanı)
+**Role:** Dynamic Event Discovery & User Matching
+**Context Memory:** User location, preferred sports, historical event participation, user "Trust Score".
+
+**Responsibilities:**
+- Analyzes user location (GPS) and sport preferences to populate the Home Screen with hyper-relevant events.
+- Sorts and filters events not just by proximity, but by the user's past performance and mutual interests.
+- Suggests ideal partners for 1v1 sports (e.g., Tennis) based on skill level and historical reliability.
+
+---
+
+## 2. @Guardian (Güvenlik ve Doğrulama)
+**Role:** Platform Security, Privacy & Anti-Fake Mechanisms
+**Context Memory:** User account age, profile completeness, chat logs (for safety), GPS POI data.
+
+**Responsibilities:**
+- **Fake Event Prevention (POI Check):** Validates event coordinates against known sports facilities, parks, or routes (e.g., Strava/Wikiloc integration). Rejects absurd scenarios like "basketball in the middle of the sea at 3 AM".
+- **New User Barrier:** Restricts newly registered users with incomplete profiles from creating events for the first 48 hours (can only send join requests).
+- **Privacy Control:** Enforces profile visibility settings. Hides sensitive data (like Strava hidden zones) from non-friends.
+- **Chat & Behavior Moderation:** Scans for profanity, harassment, and security risks (e.g., "save my number", "send IBAN") and issues warnings.
+- **Stake System (Future):** Manages point-based deposits for high-demand events.
+
+---
+
+## 3. @Referee (Puan ve Ceza Mekanizması)
+**Role:** On-field Adjudication, Check-in, and Trust Score Management
+**Context Memory:** Participant lists, event timestamps, real-time GPS check-ins, chat context (cancellations).
+
+**Responsibilities:**
+- **Pre-Event Check:** Sends reminders 2 hours before the event ("Everything okay? If you can't make it, cancel now").
+- **Real-Time Validation (Handshake):** Requires participants to be within the Geofence (e.g., 100m radius) and scan each other's QR codes/temporary codes to mark the event as "Successful".
+- **Chat Monitoring:** Detects phrases like "I can't come" or "I am cancelling". Automatically frees up the spot and notifies waitlisted users.
+- **Dispute Resolution:** In case of bad weather or force majeure (verified via chat consensus and GPS), closes the event without penalties.
+- **Penalty Matrix Execution:**
+  - *1st Offense (Educational Warning):* Empathetic message explaining sportsmanship + 1-week "Bench Mode" (observation period).
+  - *2nd Offense (Restriction):* 48-hour ban from creating/joining events + Trust Score drop.
+  - *3rd Offense (Discipline):* 1-week suspension + "Untrustworthy" profile badge.
+  - *Continuous Offense (Isolation):* Shadow Ban (can only see other shadow-banned users).
+
+---
+
+## 4. @ContentManager (Sosyal Akış)
+**Role:** Post-Event Content, Achievements, and Social Feed
+**Context Memory:** Completed events, user media, tag requests, badges.
+
+**Responsibilities:**
+- **Post-Event Trigger:** Prompts users after a successful event: "Great workout! Want to share this on your wall?"
+- **Data Enrichment:** Automatically enriches posts with technical data cards (e.g., "5km Run - 25 min") if an `event_id` is linked.
+- **Tagging & Consent:** Manages user tagging. If User A tags User B, User B must approve before it appears in their "Tagged Photos" tab.
+- **Event Archive:** Aggregates public posts linked to a specific event into a "Past Event Detail" view without cluttering the main feed.
+- **Privacy:** Ensures posts respect the "Friends Only" or "Public" visibility flags.
+
+---
+
+## Technical Persistence & Integration
+- These agents operate as serverless functions or Supabase Edge Functions.
+- State is maintained in the Supabase database (`trust_scores`, `event_logs`, `penalties`, `posts`).
+- The `.agents` context allows the AI to reference past behavior (e.g., `@Referee` knows if a user is currently in "Bench Mode").
