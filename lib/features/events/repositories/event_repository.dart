@@ -28,7 +28,7 @@ class EventRepository {
       // RPC returns different structure, we need to map it back to what UI expects
       return (response as List).map((e) => Map<String, dynamic>.from({
         ...e,
-        'sports': {'name': e['sport_name']},
+        'sports': {'name': e['sport_name'], 'category': e['category']},
         'profiles': {
           'full_name': e['host_name'],
           'avatar_url': e['host_avatar'],
@@ -39,7 +39,7 @@ class EventRepository {
     // Fallback or 'Any' selection: fetch ALL open events
     final response = await _supabase
         .from('events')
-        .select('*, sports(name), profiles(full_name, trust_score, avatar_url)')
+        .select('*, sports(name, category), profiles(full_name, trust_score, avatar_url)')
         .eq('status', 'open')
         .order('event_date', ascending: true);
     return List<Map<String, dynamic>>.from(response);

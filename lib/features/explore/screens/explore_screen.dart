@@ -18,7 +18,7 @@ import '../../events/repositories/event_repository.dart';
 
 class ExploreDistanceNotifier extends Notifier<String> {
   @override
-  String build() => '< 5km';
+  String build() => 'Any';
   void setDistance(String val) => state = val;
 }
 
@@ -83,7 +83,7 @@ final exploreMatchesProvider = FutureProvider.autoDispose<List<Map<String, dynam
   return allEvents.where((e) {
     // Category & Sport filter
     if (selectedCategory != 'All Categories') {
-      final cat = e['category'] as String? ?? '';
+      final cat = e['sports']?['category'] as String? ?? '';
       if (cat != selectedCategory) return false;
     }
     if (selectedSport != 'All Sports') {
@@ -457,12 +457,13 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF1E1E1E),
+      useSafeArea: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (_) => Consumer(
         builder: (context, ref, _) {
           final current = ref.watch(provider);
           return Padding(
-            padding: const EdgeInsets.all(24.0),
+            padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(context).padding.bottom + 24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -613,11 +614,8 @@ class _MapSectionState extends ConsumerState<_MapSection> {
                   // Event Markers
                   ...eventsAsync.maybeWhen(
                     data: (events) => events.where((e) => e['lat'] != null && e['lng'] != null).map((e) {
-                      final sport = e['sports']?['name'] as String? ?? 'Sport';
-                      IconData icon = Icons.sports_basketball;
-                      if (sport.toLowerCase().contains('tennis')) icon = Icons.sports_tennis;
-                      if (sport.toLowerCase().contains('run')) icon = Icons.directions_run;
-                      if (sport.toLowerCase().contains('foot')) icon = Icons.sports_soccer;
+                      final sportName = e['sports']?['name'] as String? ?? '';
+                      final icon = _getSportIcon(sportName);
 
                       return Marker(
                         point: LatLng(e['lat'] as double, e['lng'] as double),
@@ -682,6 +680,28 @@ class _MapSectionState extends ConsumerState<_MapSection> {
         ],
       ),
     );
+  }
+
+  IconData _getSportIcon(String sportName) {
+    final s = sportName.toLowerCase();
+    if (s.contains('tenis') || s.contains('padel')) return Icons.sports_tennis;
+    if (s.contains('masa tenisi')) return Icons.table_restaurant;
+    if (s.contains('basketbol')) return Icons.sports_basketball;
+    if (s.contains('futbol') || s.contains('halı saha')) return Icons.sports_soccer;
+    if (s.contains('voleybol')) return Icons.sports_volleyball;
+    if (s.contains('yol koşusu') || s.contains('run')) return Icons.directions_run;
+    if (s.contains('bisiklet')) return Icons.directions_bike;
+    if (s.contains('fitness') || s.contains('antrenman') || s.contains('gym')) return Icons.fitness_center;
+    if (s.contains('yürüyüş') || s.contains('hiking') || s.contains('trekking')) return Icons.terrain;
+    if (s.contains('yüzme')) return Icons.pool;
+    if (s.contains('sörf') || s.contains('sup') || s.contains('paddle')) return Icons.waves;
+    if (s.contains('boks') || s.contains('mma') || s.contains('dövüş')) return Icons.sports_mma;
+    if (s.contains('yoga') || s.contains('pilates')) return Icons.self_improvement;
+    if (s.contains('kayak') || s.contains('snowboard')) return Icons.ac_unit;
+    if (s.contains('tırmanış')) return Icons.landscape;
+    if (s.contains('moto') || s.contains('atv')) return Icons.motorcycle;
+    if (s.contains('calisthenics') || s.contains('street')) return Icons.reorder;
+    return Icons.sports;
   }
 }
 
