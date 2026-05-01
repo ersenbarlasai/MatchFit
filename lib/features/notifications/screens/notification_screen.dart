@@ -88,17 +88,28 @@ class _NotificationItemState extends ConsumerState<_NotificationItem> {
     final timeStr = _formatTime(createdAt);
     final type = widget.notification['type'] as String?;
     final senderId = widget.notification['sender_id'] as String?;
-    
+
     final senderName = widget.notification['title'] ?? 'System';
     final message = widget.notification['message'] ?? '';
+
+    // Check actual relationship status from DB to determine if buttons should show
+    // This is the source of truth - not just is_read flag
+    final relationshipAsync = (type == 'follow_request' && senderId != null)
+        ? ref.watch(incomingFollowRequestProvider(senderId))
+        : const AsyncValue.data(false);
+    
+    // Button should show if: it's a follow_request AND the request is still pending in DB
+    final hasPendingRequest = relationshipAsync.value ?? false;
+    final showButtons = type == 'follow_request' && hasPendingRequest && !_isHandled;
+    final isEffectivelyRead = isRead || _isHandled || (type == 'follow_request' && !hasPendingRequest && !_isHandled);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: (isRead || _isHandled) ? Colors.white.withOpacity(0.03) : Colors.white.withOpacity(0.07),
+        color: isEffectivelyRead ? Colors.white.withOpacity(0.03) : Colors.white.withOpacity(0.07),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: (isRead || _isHandled) ? Colors.white.withOpacity(0.05) : MatchFitTheme.accentGreen.withOpacity(0.2),
+          color: isEffectivelyRead ? Colors.white.withOpacity(0.05) : MatchFitTheme.accentGreen.withOpacity(0.2),
         ),
       ),
       child: Column(
@@ -120,7 +131,7 @@ class _NotificationItemState extends ConsumerState<_NotificationItem> {
                   child: Text(senderName,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: (isRead || _isHandled) ? Colors.white70 : Colors.white,
+                        color: isEffectivelyRead ? Colors.white70 : Colors.white,
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
                       )),
@@ -134,12 +145,12 @@ class _NotificationItemState extends ConsumerState<_NotificationItem> {
               padding: const EdgeInsets.only(top: 4),
               child: Text(message,
                   style: TextStyle(
-                    color: (isRead || _isHandled) ? Colors.white38 : Colors.white70,
+                    color: isEffectivelyRead ? Colors.white38 : Colors.white70,
                     fontSize: 13,
                     height: 1.4,
                   )),
             ),
-            trailing: (!isRead && !_isHandled)
+            trailing: !isEffectivelyRead
                 ? Container(
                     width: 8,
                     height: 8,
@@ -147,7 +158,7 @@ class _NotificationItemState extends ConsumerState<_NotificationItem> {
                   )
                 : null,
           ),
-          if (type == 'follow_request' && !isRead && !_isHandled)
+          if (showButtons)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               child: Row(

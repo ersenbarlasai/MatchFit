@@ -123,15 +123,26 @@ final userFriendsProvider = FutureProvider.autoDispose.family<List<Map<String, d
   final sb = Supabase.instance.client;
   
   try {
-    // Correctly fetch followed users with their profile details
-    // We use receiver_id to get the profile of the person being followed
-    final response = await sb
+    // Step 1: Get all receiver_ids that this user is following
+    final relationships = await sb
         .from('user_relationships')
-        .select('*, profiles:receiver_id(full_name, avatar_url, trust_score)')
+        .select('receiver_id')
         .eq('sender_id', userId)
         .eq('status', 'following');
     
-    return List<Map<String, dynamic>>.from(response);
+    final receiverIds = List<Map<String, dynamic>>.from(relationships)
+        .map((r) => r['receiver_id'] as String)
+        .toList();
+
+    if (receiverIds.isEmpty) return [];
+
+    // Step 2: Fetch profiles for those IDs
+    final profiles = await sb
+        .from('profiles')
+        .select('id, full_name, avatar_url, trust_score')
+        .inFilter('id', receiverIds);
+
+    return List<Map<String, dynamic>>.from(profiles);
   } catch (e) {
     debugPrint('Friends query error: $e');
     return [];

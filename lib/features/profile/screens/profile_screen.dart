@@ -841,9 +841,8 @@ class _FriendsTab extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(vertical: 8),
           itemCount: friends.length,
           itemBuilder: (context, index) {
-            final friend = friends[index];
-            final profile = friend['profiles'] as Map<String, dynamic>;
-            final friendId = friend['receiver_id'] as String;
+            final profile = friends[index];
+            final friendId = profile['id'] as String;
 
             return ListTile(
               contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
