@@ -36,11 +36,11 @@ final exploreMatchesProvider = FutureProvider.autoDispose<List<Map<String, dynam
   final distanceStr = ref.watch(exploreDistanceProvider);
   final selectedSport = ref.watch(exploreSportProvider);
   
-  double radius = 50000; // Default 50km
+  double? radius = 50000; // Default 50km
   if (distanceStr == '< 5km') radius = 5000;
   if (distanceStr == '< 10km') radius = 10000;
   if (distanceStr == '< 20km') radius = 20000;
-  if (distanceStr == 'Any') radius = 100000;
+  if (distanceStr == 'Any') radius = null;
 
   final allEvents = await ref.read(eventRepositoryProvider).getNearbyEvents(
     lat: userLoc?.latitude,
@@ -67,6 +67,7 @@ class ExploreScreen extends ConsumerStatefulWidget {
 
 class _ExploreScreenState extends ConsumerState<ExploreScreen> {
   bool _showAdvanced = false;
+  bool _mapExpanded = false;
 
   final _sports = ['All', 'Basketball', 'Tennis', 'Running', 'Football'];
   final _distances = ['< 5km', '< 10km', '< 20km', 'Any'];
@@ -87,205 +88,217 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
       backgroundColor: const Color(0xFF121212),
       body: Column(
         children: [
-          // ── Header ──
-          SafeArea(
-            bottom: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-              child: Row(
-                children: [
-                  GestureDetector(
-                    onTap: () => context.push('/profile'),
-                    child: profileAsync.when(
-                      data: (p) => AvatarWidget(
-                        name: p?['full_name'] ?? 'P',
-                        avatarUrl: p?['avatar_url'],
-                        radius: 21,
-                        editable: false,
+          // ── Header (hidden when map expanded) ──
+          if (!_mapExpanded)
+            SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+                child: Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () => context.push('/profile'),
+                      child: profileAsync.when(
+                        data: (p) => AvatarWidget(
+                          name: p?['full_name'] ?? 'P',
+                          avatarUrl: p?['avatar_url'],
+                          radius: 21,
+                          editable: false,
+                        ),
+                        loading: () => const CircleAvatar(radius: 21, backgroundColor: Color(0xFF1E1E1E)),
+                        error: (_, __) => const CircleAvatar(radius: 21, backgroundColor: Color(0xFF1E1E1E)),
                       ),
-                      loading: () => const CircleAvatar(radius: 21, backgroundColor: Color(0xFF1E1E1E)),
-                      error: (_, __) => const CircleAvatar(radius: 21, backgroundColor: Color(0xFF1E1E1E)),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('${_greetingTime()}, Champ',
-                            style: const TextStyle(
-                                color: Colors.white, fontWeight: FontWeight.w900, fontSize: 17)),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1E1E1E),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white.withOpacity(0.08)),
-                    ),
-                    child: const Icon(Icons.notifications_outlined, color: Colors.white70, size: 19),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // ── Filter Chips ──
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 14, 0, 0),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  // Sport dropdown
-                  GestureDetector(
-                    onTap: () => _showSportPicker(context),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF0052FF).withOpacity(0.18),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: const Color(0xFF0052FF).withOpacity(0.5)),
-                      ),
-                      child: Row(
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(Icons.sports, color: Color(0xFF4D9DFF), size: 14),
-                          const SizedBox(width: 6),
-                          Text(ref.watch(exploreSportProvider),
+                          Text('${_greetingTime()}, Champ',
                               style: const TextStyle(
-                                  color: Color(0xFF4D9DFF), fontWeight: FontWeight.bold, fontSize: 13)),
-                          const SizedBox(width: 4),
-                          const Icon(Icons.keyboard_arrow_down_rounded,
-                              color: Color(0xFF4D9DFF), size: 16),
+                                  color: Colors.white, fontWeight: FontWeight.w900, fontSize: 17)),
                         ],
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  // Distance
-                  GestureDetector(
-                    onTap: () => _showDistancePicker(context),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    Container(
+                      width: 40,
+                      height: 40,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF242424),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.white.withOpacity(0.1)),
+                        color: const Color(0xFF1E1E1E),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white.withOpacity(0.08)),
                       ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.location_on_outlined, color: Colors.white.withOpacity(0.6), size: 14),
-                          const SizedBox(width: 6),
-                          Text(ref.watch(exploreDistanceProvider),
-                              style: TextStyle(
-                                  color: Colors.white.withOpacity(0.8),
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13)),
-                        ],
-                      ),
+                      child: const Icon(Icons.notifications_outlined, color: Colors.white70, size: 19),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  // Advanced
-                  GestureDetector(
-                    onTap: () => setState(() => _showAdvanced = !_showAdvanced),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: _showAdvanced
-                            ? MatchFitTheme.accentGreen.withOpacity(0.12)
-                            : const Color(0xFF242424),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                            color: _showAdvanced
-                                ? MatchFitTheme.accentGreen.withOpacity(0.4)
-                                : Colors.white.withOpacity(0.1)),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.bar_chart_rounded,
-                              color: _showAdvanced ? MatchFitTheme.accentGreen : Colors.white60,
-                              size: 14),
-                          const SizedBox(width: 6),
-                          Text('Advanced',
-                              style: TextStyle(
-                                  color: _showAdvanced ? MatchFitTheme.accentGreen : Colors.white60,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13)),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 20),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
 
-          // ── Map Placeholder ──
-          const SizedBox(height: 12),
-          _MapSection(),
-
-          // ── Handle ──
-          const SizedBox(height: 10),
-          Center(
-            child: Container(
-              width: 36, height: 4,
-              decoration: BoxDecoration(
-                  color: Colors.white24, borderRadius: BorderRadius.circular(2)),
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // ── Nearby Matches ──
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 20),
-            child: Text('Nearby Matches',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 22)),
-          ),
-          const SizedBox(height: 14),
-
-          // ── Event List ──
-          Expanded(
-            child: matchesAsync.when(
-              loading: () => const Center(
-                  child: CircularProgressIndicator(color: MatchFitTheme.accentGreen)),
-              error: (e, _) => Center(
-                  child: Text('Error: $e', style: const TextStyle(color: Colors.white54))),
-              data: (events) {
-                final selectedSport = ref.watch(exploreSportProvider);
-                final filtered = events.where((e) {
-                  if (selectedSport == 'All') return true;
-                  final sport = e['sports']?['name'] as String? ?? '';
-                  return sport.toLowerCase() == selectedSport.toLowerCase();
-                }).toList();
-
-                if (filtered.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.search_off, color: Colors.white.withOpacity(0.2), size: 48),
-                        const SizedBox(height: 12),
-                        Text('No matches found nearby',
-                            style: TextStyle(color: Colors.white.withOpacity(0.3))),
-                      ],
+          // ── Filter Chips (hidden when map expanded) ──
+          if (!_mapExpanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 0, 0),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    // Sport dropdown
+                    GestureDetector(
+                      onTap: () => _showSportPicker(context),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0052FF).withOpacity(0.18),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: const Color(0xFF0052FF).withOpacity(0.5)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.sports, color: Color(0xFF4D9DFF), size: 14),
+                            const SizedBox(width: 6),
+                            Text(ref.watch(exploreSportProvider),
+                                style: const TextStyle(
+                                    color: Color(0xFF4D9DFF), fontWeight: FontWeight.bold, fontSize: 13)),
+                            const SizedBox(width: 4),
+                            const Icon(Icons.keyboard_arrow_down_rounded,
+                                color: Color(0xFF4D9DFF), size: 16),
+                          ],
+                        ),
+                      ),
                     ),
-                  );
-                }
-
-                return ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
-                  itemCount: filtered.length,
-                  itemBuilder: (context, index) =>
-                      _NearbyEventCard(event: filtered[index]),
-                );
-              },
+                    const SizedBox(width: 8),
+                    // Distance
+                    GestureDetector(
+                      onTap: () => _showDistancePicker(context),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF242424),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.white.withOpacity(0.1)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.location_on_outlined, color: Colors.white.withOpacity(0.6), size: 14),
+                            const SizedBox(width: 6),
+                            Text(ref.watch(exploreDistanceProvider),
+                                style: TextStyle(
+                                    color: Colors.white.withOpacity(0.8),
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13)),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Advanced
+                    GestureDetector(
+                      onTap: () => setState(() => _showAdvanced = !_showAdvanced),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: _showAdvanced
+                              ? MatchFitTheme.accentGreen.withOpacity(0.12)
+                              : const Color(0xFF242424),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                              color: _showAdvanced
+                                  ? MatchFitTheme.accentGreen.withOpacity(0.4)
+                                  : Colors.white.withOpacity(0.1)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.bar_chart_rounded,
+                                color: _showAdvanced ? MatchFitTheme.accentGreen : Colors.white60,
+                                size: 14),
+                            const SizedBox(width: 6),
+                            Text('Advanced',
+                                style: TextStyle(
+                                    color: _showAdvanced ? MatchFitTheme.accentGreen : Colors.white60,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13)),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 20),
+                  ],
+                ),
+              ),
             ),
-          ),
+
+          // ── Map ──
+          if (!_mapExpanded) const SizedBox(height: 12),
+          _MapSection(expanded: _mapExpanded, onToggle: () => setState(() => _mapExpanded = !_mapExpanded)),
+
+          // ── Handle (hidden when expanded) ──
+          if (!_mapExpanded) ...
+          [
+            const SizedBox(height: 10),
+            Center(
+              child: GestureDetector(
+                onTap: () => setState(() => _mapExpanded = !_mapExpanded),
+                child: Container(
+                  width: 36, height: 4,
+                  decoration: BoxDecoration(
+                      color: Colors.white24, borderRadius: BorderRadius.circular(2)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          // ── Nearby Matches (hidden when map expanded) ──
+          if (!_mapExpanded) ...
+          [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Text('Nearby Matches',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 22)),
+            ),
+            const SizedBox(height: 14),
+          ],
+
+          // ── Event List (hidden when map expanded) ──
+          if (!_mapExpanded)
+            Expanded(
+              child: matchesAsync.when(
+                loading: () => const Center(
+                    child: CircularProgressIndicator(color: MatchFitTheme.accentGreen)),
+                error: (e, _) => Center(
+                    child: Text('Error: $e', style: const TextStyle(color: Colors.white54))),
+                data: (events) {
+                  final selectedSport = ref.watch(exploreSportProvider);
+                  final filtered = events.where((e) {
+                    if (selectedSport == 'All') return true;
+                    final sport = e['sports']?['name'] as String? ?? '';
+                    return sport.toLowerCase() == selectedSport.toLowerCase();
+                  }).toList();
+
+                  if (filtered.isEmpty) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.search_off, color: Colors.white.withOpacity(0.2), size: 48),
+                          const SizedBox(height: 12),
+                          Text('No matches found nearby',
+                              style: TextStyle(color: Colors.white.withOpacity(0.3))),
+                        ],
+                      ),
+                    );
+                  }
+
+                  return ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+                    itemCount: filtered.length,
+                    itemBuilder: (context, index) =>
+                        _NearbyEventCard(event: filtered[index]),
+                  );
+                },
+              ),
+            ),
         ],
       ),
     );
@@ -410,12 +423,22 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
 
 // ── Map Section ───────────────────────────────────────────────────
 
-class _MapSection extends ConsumerWidget {
+class _MapSection extends ConsumerStatefulWidget {
+  final bool expanded;
+  final VoidCallback onToggle;
+  const _MapSection({required this.expanded, required this.onToggle});
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_MapSection> createState() => _MapSectionState();
+}
+
+class _MapSectionState extends ConsumerState<_MapSection> {
+  @override
+  Widget build(BuildContext context) {
     final userLoc = ref.watch(userLocationProvider).value;
     final eventsAsync = ref.watch(exploreMatchesProvider);
     final distanceStr = ref.watch(exploreDistanceProvider);
+    final expanded = widget.expanded;
     
     double radiusInMeters = 5000;
     if (distanceStr == '< 10km') radiusInMeters = 10000;
@@ -426,9 +449,11 @@ class _MapSection extends ConsumerWidget {
         ? LatLng(userLoc.latitude, userLoc.longitude)
         : const LatLng(41.0082, 28.9784); // Istanbul fallback
 
-    return Container(
-      height: 220,
-      margin: const EdgeInsets.symmetric(horizontal: 0),
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeInOut,
+      height: expanded ? MediaQuery.of(context).size.height : 220,
+      margin: EdgeInsets.zero,
       child: Stack(
         children: [
           FlutterMap(
@@ -439,7 +464,7 @@ class _MapSection extends ConsumerWidget {
             ),
             children: [
               TileLayer(
-                urlTemplate: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+                urlTemplate: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
                 subdomains: const ['a', 'b', 'c', 'd'],
                 userAgentPackageName: 'com.matchfit.app',
               ),
@@ -505,16 +530,39 @@ class _MapSection extends ConsumerWidget {
               ),
             ],
           ),
-          // Bottom fade
+          // Bottom fade (only when not expanded)
+          if (!expanded)
+            Positioned(
+              bottom: 0, left: 0, right: 0,
+              child: Container(
+                height: 60,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Colors.transparent, const Color(0xFF121212).withOpacity(0.9)],
+                  ),
+                ),
+              ),
+            ),
+          // Expand / Collapse button
           Positioned(
-            bottom: 0, left: 0, right: 0,
-            child: Container(
-              height: 80,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Colors.transparent, const Color(0xFF121212).withOpacity(0.9)],
+            top: expanded ? 48 : 10,
+            right: 12,
+            child: GestureDetector(
+              onTap: widget.onToggle,
+              child: Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.18), blurRadius: 8)],
+                ),
+                child: Icon(
+                  expanded ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded,
+                  color: const Color(0xFF1A1A2E),
+                  size: 20,
                 ),
               ),
             ),

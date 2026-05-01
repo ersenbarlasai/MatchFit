@@ -18,8 +18,8 @@ class EventRepository {
     await _supabase.from('events').delete().eq('id', eventId);
   }
 
-  Future<List<Map<String, dynamic>>> getNearbyEvents({double? lat, double? lng, double radius = 20000}) async {
-    if (lat != null && lng != null) {
+  Future<List<Map<String, dynamic>>> getNearbyEvents({double? lat, double? lng, double? radius}) async {
+    if (lat != null && lng != null && radius != null) {
       final response = await _supabase.rpc('get_nearby_events', params: {
         'user_lat': lat,
         'user_lng': lng,
@@ -36,7 +36,7 @@ class EventRepository {
       })).toList();
     }
 
-    // Fallback if no location
+    // Fallback or 'Any' selection: fetch ALL open events
     final response = await _supabase
         .from('events')
         .select('*, sports(name), profiles(full_name, trust_score, avatar_url)')
