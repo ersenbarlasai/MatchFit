@@ -172,6 +172,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
 
     // Use local state if user already changed avatar, else use DB value
     final avatarUrl = _avatarUrl ?? (data['avatar_url'] as String? ?? '');
+    
+    final incomingRequestAsync = userId.isNotEmpty 
+        ? ref.watch(incomingFollowRequestProvider(userId))
+        : const AsyncValue.data(false);
 
     return NestedScrollView(
       headerSliverBuilder: (context, _) => [
@@ -241,6 +245,76 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 ],
               ),
               const SizedBox(height: 20),
+              
+              // ── Incoming Follow Request Banner ──
+              if (incomingRequestAsync.value == true)
+                Container(
+                  margin: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: MatchFitTheme.accentGreen.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: MatchFitTheme.accentGreen.withOpacity(0.2)),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: MatchFitTheme.accentGreen.withOpacity(0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.person_add_outlined, color: MatchFitTheme.accentGreen, size: 20),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text('$name wants to follow you',
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () async {
+                                await ref.read(socialRepositoryProvider).updateFollowStatus(userId, true);
+                                ref.invalidate(incomingFollowRequestProvider(userId));
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: MatchFitTheme.accentGreen,
+                                foregroundColor: Colors.black,
+                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                elevation: 0,
+                              ),
+                              child: const Text('Accept', style: TextStyle(fontWeight: FontWeight.bold)),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () async {
+                                await ref.read(socialRepositoryProvider).updateFollowStatus(userId, false);
+                                ref.invalidate(incomingFollowRequestProvider(userId));
+                              },
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.white70,
+                                side: BorderSide(color: Colors.white.withOpacity(0.1)),
+                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                              child: const Text('Reject', style: TextStyle(fontWeight: FontWeight.bold)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
               // Action Buttons
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -353,7 +427,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           _PostsGrid(userId: widget.userId),
           _PastEventsTab(userId: widget.userId),
           _BadgesTab(),
-          _FriendsTab(),
+          _FriendsTab(userId: widget.userId),
         ],
       ),
     );
@@ -736,19 +810,58 @@ class _BadgesTab extends StatelessWidget {
   }
 }
 
-class _FriendsTab extends StatelessWidget {
+class _FriendsTab extends ConsumerWidget {
+  final String? userId;
+  const _FriendsTab({this.userId});
+
   @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.people_outline, size: 48, color: Colors.white.withOpacity(0.1)),
-          const SizedBox(height: 12),
-          Text('Friends feature coming soon',
-              style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 14)),
-        ],
-      ),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final targetId = userId ?? ref.read(authRepositoryProvider).currentUser?.id;
+    if (targetId == null) return const SizedBox.shrink();
+
+    final friendsAsync = ref.watch(userFriendsProvider(targetId));
+
+    return friendsAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator(color: MatchFitTheme.accentGreen)),
+      error: (e, _) => Center(child: Text('Error: $e', style: const TextStyle(color: Colors.white24))),
+      data: (friends) {
+        if (friends.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.people_outline, size: 48, color: Colors.white.withOpacity(0.1)),
+                const SizedBox(height: 12),
+                Text('No friends yet', style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 14)),
+              ],
+            ),
+          );
+        }
+        return ListView.builder(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          itemCount: friends.length,
+          itemBuilder: (context, index) {
+            final friend = friends[index];
+            final profile = friend['profiles'] as Map<String, dynamic>;
+            final friendId = friend['receiver_id'] as String;
+
+            return ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+              leading: AvatarWidget(
+                name: profile['full_name'] ?? 'Player',
+                radius: 22,
+                avatarUrl: profile['avatar_url'],
+              ),
+              title: Text(profile['full_name'] ?? 'Player',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+              subtitle: Text('Trust Score: ${profile['trust_score'] ?? 100}',
+                  style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12)),
+              trailing: Icon(Icons.arrow_forward_ios, size: 14, color: Colors.white.withOpacity(0.2)),
+              onTap: () => context.push('/user-profile', extra: friendId),
+            );
+          },
+        );
+      },
     );
   }
 }

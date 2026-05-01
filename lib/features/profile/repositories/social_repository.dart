@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/foundation.dart';
 
 class SocialRepository {
   final SupabaseClient _supabase;
@@ -73,8 +74,10 @@ class SocialRepository {
         .from('user_relationships')
         .stream(primaryKey: ['id'])
         .eq('sender_id', myId)
-        .eq('receiver_id', targetUserId)
-        .map((data) => data.isEmpty ? null : data.first['status'] as String?);
+        .map((data) {
+          final match = data.where((row) => row['receiver_id'] == targetUserId);
+          return match.isEmpty ? null : match.first['status'] as String?;
+        });
   }
 
   Future<bool> isBlockedBy(String targetUserId) async {
@@ -99,4 +102,38 @@ final relationshipStatusProvider = StreamProvider.autoDispose.family<String?, St
 
 final isBlockedByProvider = FutureProvider.autoDispose.family<bool, String>((ref, targetUserId) async {
   return ref.read(socialRepositoryProvider).isBlockedBy(targetUserId);
+});
+
+final incomingFollowRequestProvider = FutureProvider.autoDispose.family<bool, String>((ref, senderId) async {
+  final myId = Supabase.instance.client.auth.currentUser?.id;
+  if (myId == null) return false;
+
+  final response = await Supabase.instance.client
+      .from('user_relationships')
+      .select()
+      .eq('sender_id', senderId)
+      .eq('receiver_id', myId)
+      .eq('status', 'pending')
+      .maybeSingle();
+  
+  return response != null;
+});
+
+final userFriendsProvider = FutureProvider.autoDispose.family<List<Map<String, dynamic>>, String>((ref, userId) async {
+  final sb = Supabase.instance.client;
+  
+  try {
+    // Correctly fetch followed users with their profile details
+    // We use receiver_id to get the profile of the person being followed
+    final response = await sb
+        .from('user_relationships')
+        .select('*, profiles:receiver_id(full_name, avatar_url, trust_score)')
+        .eq('sender_id', userId)
+        .eq('status', 'following');
+    
+    return List<Map<String, dynamic>>.from(response);
+  } catch (e) {
+    debugPrint('Friends query error: $e');
+    return [];
+  }
 });

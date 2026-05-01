@@ -69,36 +69,44 @@ class NotificationScreen extends ConsumerWidget {
   }
 }
 
-class _NotificationItem extends ConsumerWidget {
+class _NotificationItem extends ConsumerStatefulWidget {
   final Map<String, dynamic> notification;
   const _NotificationItem({required this.notification});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final isRead = notification['is_read'] as bool? ?? false;
-    final createdAt = DateTime.parse(notification['created_at']);
+  ConsumerState<_NotificationItem> createState() => _NotificationItemState();
+}
+
+class _NotificationItemState extends ConsumerState<_NotificationItem> {
+  bool _isHandled = false;
+  String? _handleStatus;
+
+  @override
+  Widget build(BuildContext context) {
+    final isRead = widget.notification['is_read'] as bool? ?? false;
+    final createdAt = DateTime.parse(widget.notification['created_at']);
     final timeStr = _formatTime(createdAt);
-    final type = notification['type'] as String?;
-    final senderId = notification['sender_id'] as String?;
+    final type = widget.notification['type'] as String?;
+    final senderId = widget.notification['sender_id'] as String?;
     
-    final senderName = notification['title'] ?? 'System';
-    final message = notification['message'] ?? '';
+    final senderName = widget.notification['title'] ?? 'System';
+    final message = widget.notification['message'] ?? '';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: isRead ? Colors.white.withOpacity(0.03) : Colors.white.withOpacity(0.07),
+        color: (isRead || _isHandled) ? Colors.white.withOpacity(0.03) : Colors.white.withOpacity(0.07),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: isRead ? Colors.white.withOpacity(0.05) : MatchFitTheme.accentGreen.withOpacity(0.2),
+          color: (isRead || _isHandled) ? Colors.white.withOpacity(0.05) : MatchFitTheme.accentGreen.withOpacity(0.2),
         ),
       ),
       child: Column(
         children: [
           ListTile(
             onTap: () {
-              if (!isRead) {
-                ref.read(notificationRepositoryProvider).markAsRead(notification['id']);
+              if (!isRead && !_isHandled) {
+                ref.read(notificationRepositoryProvider).markAsRead(widget.notification['id']);
               }
               if (senderId != null) {
                 context.push('/user-profile', extra: senderId);
@@ -108,12 +116,16 @@ class _NotificationItem extends ConsumerWidget {
             title: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(senderName,
-                    style: TextStyle(
-                      color: isRead ? Colors.white70 : Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                    )),
+                Flexible(
+                  child: Text(senderName,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: (isRead || _isHandled) ? Colors.white70 : Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      )),
+                ),
+                const SizedBox(width: 8),
                 Text(timeStr,
                     style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 11)),
               ],
@@ -122,12 +134,12 @@ class _NotificationItem extends ConsumerWidget {
               padding: const EdgeInsets.only(top: 4),
               child: Text(message,
                   style: TextStyle(
-                    color: isRead ? Colors.white38 : Colors.white70,
+                    color: (isRead || _isHandled) ? Colors.white38 : Colors.white70,
                     fontSize: 13,
                     height: 1.4,
                   )),
             ),
-            trailing: !isRead
+            trailing: (!isRead && !_isHandled)
                 ? Container(
                     width: 8,
                     height: 8,
@@ -135,7 +147,7 @@ class _NotificationItem extends ConsumerWidget {
                   )
                 : null,
           ),
-          if (type == 'follow_request' && !isRead)
+          if (type == 'follow_request' && !isRead && !_isHandled)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               child: Row(
@@ -144,8 +156,9 @@ class _NotificationItem extends ConsumerWidget {
                     child: ElevatedButton(
                       onPressed: () async {
                         if (senderId != null) {
+                          setState(() { _isHandled = true; _handleStatus = 'Accepted'; });
                           await ref.read(socialRepositoryProvider).updateFollowStatus(senderId, true);
-                          await ref.read(notificationRepositoryProvider).markAsRead(notification['id']);
+                          await ref.read(notificationRepositoryProvider).markAsRead(widget.notification['id']);
                         }
                       },
                       style: ElevatedButton.styleFrom(
@@ -162,8 +175,9 @@ class _NotificationItem extends ConsumerWidget {
                     child: OutlinedButton(
                       onPressed: () async {
                         if (senderId != null) {
+                          setState(() { _isHandled = true; _handleStatus = 'Rejected'; });
                           await ref.read(socialRepositoryProvider).updateFollowStatus(senderId, false);
-                          await ref.read(notificationRepositoryProvider).markAsRead(notification['id']);
+                          await ref.read(notificationRepositoryProvider).markAsRead(widget.notification['id']);
                         }
                       },
                       style: OutlinedButton.styleFrom(
@@ -173,6 +187,28 @@ class _NotificationItem extends ConsumerWidget {
                         padding: const EdgeInsets.symmetric(vertical: 8),
                       ),
                       child: const Text('Reject', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else if (_isHandled && _handleStatus != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Row(
+                children: [
+                  Icon(
+                    _handleStatus == 'Accepted' ? Icons.check_circle_outline : Icons.cancel_outlined,
+                    size: 16,
+                    color: _handleStatus == 'Accepted' ? MatchFitTheme.accentGreen : Colors.white30,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    _handleStatus!,
+                    style: TextStyle(
+                      color: _handleStatus == 'Accepted' ? MatchFitTheme.accentGreen : Colors.white30,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
                     ),
                   ),
                 ],
@@ -188,6 +224,14 @@ class _NotificationItem extends ConsumerWidget {
     Color color;
 
     switch (type) {
+      case 'follow_request':
+        iconData = Icons.person_add_outlined;
+        color = MatchFitTheme.accentGreen;
+        break;
+      case 'follow_approved':
+        iconData = Icons.check_circle_outline;
+        color = MatchFitTheme.accentGreen;
+        break;
       case 'join_request':
         iconData = Icons.person_add_outlined;
         color = const Color(0xFF0052FF);
