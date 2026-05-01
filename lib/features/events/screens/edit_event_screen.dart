@@ -5,6 +5,8 @@ import 'package:matchfit/core/theme.dart';
 import '../repositories/event_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:matchfit/core/services/location_search_service.dart';
+import 'package:matchfit/core/constants/location_data.dart';
+import 'package:matchfit/core/constants/sports_data.dart';
 import 'dart:async';
 
 class EditEventScreen extends ConsumerStatefulWidget {
@@ -17,11 +19,17 @@ class EditEventScreen extends ConsumerStatefulWidget {
 
 class _EditEventScreenState extends ConsumerState<EditEventScreen> {
   late final TextEditingController _titleController;
-  late final TextEditingController _locationController;
+  late final TextEditingController _venueController;
   late final TextEditingController _descriptionController;
   
+  String selectedCountry = 'Türkiye';
+  String? selectedProvince;
+  String? selectedDistrict;
+  
+  String? selectedCategory;
   late String selectedSport;
   late String requiredLevel;
+  late bool isIndoor;
   late double maxParticipants;
   DateTime? selectedDate;
   TimeOfDay? selectedTime;
@@ -38,7 +46,8 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
     _debounce = Timer(const Duration(milliseconds: 500), () async {
       if (value.length > 2) {
-        final results = await _searchService.search(value);
+        final contextStr = '${selectedDistrict ?? ''} ${selectedProvince ?? ''} $selectedCountry';
+        final results = await _searchService.search('$value $contextStr'.trim());
         setState(() => _suggestions = results);
       } else {
         setState(() => _suggestions = []);
@@ -51,11 +60,33 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
     super.initState();
     final e = widget.event;
     _titleController = TextEditingController(text: e['title']);
-    _locationController = TextEditingController(text: e['location_name'] ?? e['location_text']);
+    _venueController = TextEditingController(text: ''); // Reset venue or try to parse
     _descriptionController = TextEditingController(text: e['description']);
     
-    selectedSport = e['sports']?['name'] ?? 'Tennis';
+    // Attempt to parse old location name if it follows the new format
+    final oldLoc = e['location_name'] ?? e['location_text'] ?? '';
+    if (oldLoc.contains(',')) {
+      final parts = oldLoc.split(',').map((p) => p.trim()).toList();
+      if (parts.length >= 3) {
+        selectedDistrict = parts[0];
+        selectedProvince = parts[1];
+        selectedCountry = parts[2].split('-')[0].trim(); // Handle " - Venue"
+        if (oldLoc.contains(' - ')) {
+          _venueController.text = oldLoc.split(' - ').last;
+        }
+      }
+    }
+    
+    selectedSport = e['sports']?['name'] ?? 'Tenis';
+    // Find category for initial sport
+    try {
+      selectedCategory = sportsData.firstWhere((c) => c.subcategories.contains(selectedSport)).name;
+    } catch (_) {
+      selectedCategory = 'RAKET SPORLARI';
+    }
+
     requiredLevel = e['required_level'] ?? 'Any';
+    isIndoor = e['is_indoor'] as bool? ?? false;
     maxParticipants = (e['max_participants'] as num?)?.toDouble() ?? 2.0;
     
     if (e['event_date'] != null) {
@@ -74,10 +105,17 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
   }
 
   Future<void> _updateEvent() async {
-    if (_titleController.text.isEmpty || selectedDate == null || selectedTime == null || _locationController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill all required fields')),
-      );
+    String? error;
+    if (_titleController.text.isEmpty) error = 'Event Title is required';
+    else if (selectedCategory == null) error = 'Main Category is required';
+    else if (selectedSport == null) error = 'Sub-branch is required';
+    else if (selectedDate == null) error = 'Date is required';
+    else if (selectedTime == null) error = 'Time is required';
+    else if (selectedProvince == null) error = 'City is required';
+    else if (selectedDistrict == null) error = 'District is required';
+
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
       return;
     }
 
@@ -99,16 +137,19 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
       
       final formattedTime = '${selectedTime!.hour.toString().padLeft(2, '0')}:${selectedTime!.minute.toString().padLeft(2, '0')}:00';
 
+      final fullLocationName = '$selectedDistrict, $selectedProvince, $selectedCountry${_venueController.text.isNotEmpty ? ' - ${_venueController.text}' : ''}';
+
       final eventData = {
         'title': _titleController.text,
         'description': _descriptionController.text,
         'event_date': eventDate.toIso8601String().split('T')[0],
         'start_time': formattedTime,
-        'location_name': _locationController.text,
+        'location_name': fullLocationName,
         'lat': _selectedLat,
         'lng': _selectedLng,
         'max_participants': maxParticipants.toInt(),
         'required_level': requiredLevel,
+        'is_indoor': isIndoor,
         'sport_id': sportResponse['id'],
       };
 
@@ -153,13 +194,50 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
               decoration: const InputDecoration(labelText: 'Event Title', border: OutlineInputBorder()),
             ),
             const SizedBox(height: 16),
+            // Sport Category Dropdown
+            DropdownButtonFormField<String>(
+              value: selectedCategory,
+              decoration: const InputDecoration(labelText: 'Main Category', border: OutlineInputBorder()),
+              items: sportsData.map((c) => DropdownMenuItem<String>(value: c.name, child: Text(c.name))).toList(),
+              onChanged: (value) => setState(() {
+                selectedCategory = value;
+                // selectedSport = null; // Edit mode: keep old or pick first sub
+              }),
+            ),
+            const SizedBox(height: 16),
+
+            // Sub-category Dropdown
             DropdownButtonFormField<String>(
               value: selectedSport,
-              decoration: const InputDecoration(labelText: 'Sport', border: OutlineInputBorder()),
-              items: ['Tennis', 'Running', 'Basketball', 'Football']
-                  .map((sport) => DropdownMenuItem(value: sport, child: Text(sport)))
+              decoration: const InputDecoration(labelText: 'Sub-branch', border: OutlineInputBorder()),
+              items: (selectedCategory != null 
+                ? sportsData.firstWhere((c) => c.name == selectedCategory).subcategories 
+                : <String>[])
+                  .map<DropdownMenuItem<String>>((s) => DropdownMenuItem<String>(value: s, child: Text(s)))
                   .toList(),
               onChanged: (value) => setState(() => selectedSport = value!),
+            ),
+            const SizedBox(height: 16),
+
+            // Indoor / Outdoor
+            Row(
+              children: [
+                const Text('Setting:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(width: 12),
+                ChoiceChip(
+                  label: const Text('Outdoor'),
+                  selected: !isIndoor,
+                  onSelected: (val) => setState(() => isIndoor = !val),
+                  selectedColor: MatchFitTheme.accentGreen.withOpacity(0.3),
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: const Text('Indoor'),
+                  selected: isIndoor,
+                  onSelected: (val) => setState(() => isIndoor = val),
+                  selectedColor: MatchFitTheme.accentGreen.withOpacity(0.3),
+                ),
+              ],
             ),
             const SizedBox(height: 16),
             Row(
@@ -201,11 +279,58 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
                 ),
               ],
             ),
+            const SizedBox(height: 24),
+            const Text('Location', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const SizedBox(height: 12),
+            
+            // Country Dropdown
+            DropdownButtonFormField<String>(
+              value: selectedCountry,
+              decoration: const InputDecoration(labelText: 'Country', border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)))),
+              items: countries.map<DropdownMenuItem<String>>((c) => DropdownMenuItem<String>(value: c, child: Text(c))).toList(),
+              onChanged: (val) => setState(() {
+                selectedCountry = val!;
+                selectedProvince = null;
+                selectedDistrict = null;
+              }),
+            ),
+            const SizedBox(height: 12),
+
+            // Province Dropdown
+            DropdownButtonFormField<String>(
+              value: selectedProvince,
+              hint: const Text('Select City (İl)'),
+              decoration: const InputDecoration(labelText: 'City (İl)', border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)))),
+              items: turkeyProvinces.keys.toList().map<DropdownMenuItem<String>>((p) => DropdownMenuItem<String>(value: p, child: Text(p))).toList(),
+              onChanged: (val) => setState(() {
+                selectedProvince = val;
+                selectedDistrict = null;
+              }),
+            ),
+            const SizedBox(height: 12),
+
+            // District Dropdown
+            DropdownButtonFormField<String>(
+              value: selectedDistrict,
+              hint: const Text('Select District (İlçe)'),
+              decoration: const InputDecoration(labelText: 'District (İlçe)', border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)))),
+              items: (selectedProvince != null ? turkeyProvinces[selectedProvince]! : <String>[])
+                  .map<DropdownMenuItem<String>>((d) => DropdownMenuItem<String>(value: d, child: Text(d)))
+                  .toList(),
+              onChanged: (val) => setState(() => selectedDistrict = val),
+            ),
             const SizedBox(height: 16),
+
+            // Venue Search
             TextField(
-              controller: _locationController,
+              controller: _venueController,
               onChanged: _onLocationChanged,
-              decoration: const InputDecoration(labelText: 'Location', prefixIcon: Icon(Icons.location_on), border: OutlineInputBorder()),
+              decoration: const InputDecoration(
+                labelText: 'Venue / Street (Optional)',
+                hintText: 'Search for a specific park, court...',
+                prefixIcon: Icon(Icons.place_outlined),
+                border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
+              ),
             ),
             if (_suggestions.isNotEmpty)
               Container(
@@ -226,7 +351,7 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
                       title: Text(s.description, style: const TextStyle(color: Colors.white70, fontSize: 13)),
                       onTap: () {
                         setState(() {
-                          _locationController.text = s.description;
+                          _venueController.text = s.description;
                           _selectedLat = s.lat;
                           _selectedLng = s.lng;
                           _suggestions = [];
@@ -247,8 +372,8 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
             DropdownButtonFormField<String>(
               value: requiredLevel,
               decoration: const InputDecoration(labelText: 'Required Skill Level', border: OutlineInputBorder()),
-              items: ['Any', 'Beginner', 'Intermediate', 'Advanced']
-                  .map((level) => DropdownMenuItem(value: level, child: Text(level)))
+              items: <String>['Any', 'Beginner', 'Intermediate', 'Advanced']
+                  .map<DropdownMenuItem<String>>((level) => DropdownMenuItem<String>(value: level, child: Text(level)))
                   .toList(),
               onChanged: (value) => setState(() => requiredLevel = value!),
             ),

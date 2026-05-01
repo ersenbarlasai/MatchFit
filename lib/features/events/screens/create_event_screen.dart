@@ -8,6 +8,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../referee/repositories/referee_repository.dart';
 import '../../guardian/repositories/guardian_repository.dart';
 import 'package:matchfit/core/services/location_search_service.dart';
+import 'package:matchfit/core/constants/location_data.dart';
+import 'package:matchfit/core/constants/sports_data.dart';
 import 'dart:async';
 
 class CreateEventScreen extends ConsumerStatefulWidget {
@@ -19,11 +21,17 @@ class CreateEventScreen extends ConsumerStatefulWidget {
 
 class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   final _titleController = TextEditingController();
-  final _locationController = TextEditingController();
+  final _venueController = TextEditingController(); // Replaced _locationController with _venueController
   final _descriptionController = TextEditingController();
   
-  String selectedSport = 'Tennis';
+  String selectedCountry = 'Türkiye';
+  String? selectedProvince;
+  String? selectedDistrict;
+  
+  String? selectedCategory;
+  String? selectedSport; // This will now be the sub-category
   String requiredLevel = 'Any';
+  bool isIndoor = false;
   double maxParticipants = 2;
   DateTime? selectedDate;
   TimeOfDay? selectedTime;
@@ -40,19 +48,26 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
     _debounce = Timer(const Duration(milliseconds: 500), () async {
       if (value.length > 2) {
-        final results = await _searchService.search(value);
+        final contextStr = '${selectedDistrict ?? ''} ${selectedProvince ?? ''} $selectedCountry';
+        final results = await _searchService.search('$value $contextStr'.trim());
         setState(() => _suggestions = results);
       } else {
         setState(() => _suggestions = []);
       }
     });
   }
-
   Future<void> _publishEvent() async {
-    if (_titleController.text.isEmpty || selectedDate == null || selectedTime == null || _locationController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill all required fields')),
-      );
+    String? error;
+    if (_titleController.text.isEmpty) error = 'Event Title is required';
+    else if (selectedCategory == null) error = 'Main Category is required';
+    else if (selectedSport == null) error = 'Sub-branch is required';
+    else if (selectedDate == null) error = 'Date is required';
+    else if (selectedTime == null) error = 'Time is required';
+    else if (selectedProvince == null) error = 'City is required';
+    else if (selectedDistrict == null) error = 'District is required';
+
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
       return;
     }
 
@@ -84,7 +99,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
       final sportResponse = await Supabase.instance.client
           .from('sports')
           .select('id')
-          .eq('name', selectedSport)
+          .eq('name', selectedSport!)
           .maybeSingle();
           
       if (sportResponse == null) {
@@ -97,16 +112,19 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
       
       final formattedTime = '${selectedTime!.hour.toString().padLeft(2, '0')}:${selectedTime!.minute.toString().padLeft(2, '0')}:00';
 
+      final fullLocationName = '$selectedDistrict, $selectedProvince, $selectedCountry${_venueController.text.isNotEmpty ? ' - ${_venueController.text}' : ''}';
+
       final eventData = {
         'title': _titleController.text,
         'description': _descriptionController.text,
         'event_date': eventDate.toIso8601String().split('T')[0],
         'start_time': formattedTime,
-        'location_name': _locationController.text,
+        'location_name': fullLocationName,
         'lat': _selectedLat,
         'lng': _selectedLng,
         'max_participants': maxParticipants.toInt(),
         'required_level': requiredLevel,
+        'is_indoor': isIndoor,
         'sport_id': sportResponse['id'],
         'host_id': currentUser.id,
       };
@@ -156,18 +174,51 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
               ),
             ),
             const SizedBox(height: 16),
+            // Sport Category Dropdown
+            DropdownButtonFormField<String>(
+              value: selectedCategory,
+              decoration: const InputDecoration(labelText: 'Main Category', border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)))),
+              items: sportsData.map((c) => DropdownMenuItem<String>(value: c.name, child: Text(c.name))).toList(),
+              onChanged: (value) => setState(() {
+                selectedCategory = value;
+                selectedSport = null; // Reset subcategory
+              }),
+            ),
+            const SizedBox(height: 16),
+
+            // Sub-category Dropdown
             DropdownButtonFormField<String>(
               value: selectedSport,
-              decoration: const InputDecoration(
-                labelText: 'Sport',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.all(Radius.circular(12)),
-                ),
-              ),
-              items: ['Tennis', 'Running', 'Basketball', 'Football']
-                  .map((sport) => DropdownMenuItem(value: sport, child: Text(sport)))
+              hint: const Text('Select Sub-branch'),
+              decoration: const InputDecoration(labelText: 'Sub-branch', border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)))),
+              items: (selectedCategory != null 
+                ? sportsData.firstWhere((c) => c.name == selectedCategory).subcategories 
+                : <String>[])
+                  .map<DropdownMenuItem<String>>((s) => DropdownMenuItem<String>(value: s, child: Text(s)))
                   .toList(),
-              onChanged: (value) => setState(() => selectedSport = value!),
+              onChanged: (value) => setState(() => selectedSport = value),
+            ),
+            const SizedBox(height: 16),
+
+            // Indoor / Outdoor
+            Row(
+              children: [
+                const Text('Setting:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(width: 12),
+                ChoiceChip(
+                  label: const Text('Outdoor'),
+                  selected: !isIndoor,
+                  onSelected: (val) => setState(() => isIndoor = !val),
+                  selectedColor: MatchFitTheme.accentGreen.withOpacity(0.3),
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: const Text('Indoor'),
+                  selected: isIndoor,
+                  onSelected: (val) => setState(() => isIndoor = val),
+                  selectedColor: MatchFitTheme.accentGreen.withOpacity(0.3),
+                ),
+              ],
             ),
             const SizedBox(height: 16),
             Row(
@@ -227,17 +278,57 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                 ),
               ],
             ),
+            const SizedBox(height: 24),
+            const Text('Location', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const SizedBox(height: 12),
+            
+            // Country Dropdown
+            DropdownButtonFormField<String>(
+              value: selectedCountry,
+              decoration: const InputDecoration(labelText: 'Country', border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)))),
+              items: countries.map<DropdownMenuItem<String>>((c) => DropdownMenuItem<String>(value: c, child: Text(c))).toList(),
+              onChanged: (val) => setState(() {
+                selectedCountry = val!;
+                selectedProvince = null;
+                selectedDistrict = null;
+              }),
+            ),
+            const SizedBox(height: 12),
+
+            // Province Dropdown
+            DropdownButtonFormField<String>(
+              value: selectedProvince,
+              hint: const Text('Select City (İl)'),
+              decoration: const InputDecoration(labelText: 'City (İl)', border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)))),
+              items: turkeyProvinces.keys.toList().map<DropdownMenuItem<String>>((p) => DropdownMenuItem<String>(value: p, child: Text(p))).toList(),
+              onChanged: (val) => setState(() {
+                selectedProvince = val;
+                selectedDistrict = null;
+              }),
+            ),
+            const SizedBox(height: 12),
+
+            // District Dropdown
+            DropdownButtonFormField<String>(
+              value: selectedDistrict,
+              hint: const Text('Select District (İlçe)'),
+              decoration: const InputDecoration(labelText: 'District (İlçe)', border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)))),
+              items: (selectedProvince != null ? turkeyProvinces[selectedProvince]! : <String>[])
+                  .map<DropdownMenuItem<String>>((d) => DropdownMenuItem<String>(value: d, child: Text(d)))
+                  .toList(),
+              onChanged: (val) => setState(() => selectedDistrict = val),
+            ),
             const SizedBox(height: 16),
+
+            // Venue Search
             TextField(
-              controller: _locationController,
+              controller: _venueController,
               onChanged: _onLocationChanged,
               decoration: const InputDecoration(
-                labelText: 'Location',
-                hintText: 'Search for a court or park...',
-                prefixIcon: Icon(Icons.location_on),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.all(Radius.circular(12)),
-                ),
+                labelText: 'Venue / Street (Optional)',
+                hintText: 'Search for a specific park, court...',
+                prefixIcon: Icon(Icons.place_outlined),
+                border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
               ),
             ),
             if (_suggestions.isNotEmpty)
@@ -259,7 +350,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                       title: Text(s.description, style: const TextStyle(color: Colors.white70, fontSize: 13)),
                       onTap: () {
                         setState(() {
-                          _locationController.text = s.description;
+                          _venueController.text = s.description;
                           _selectedLat = s.lat;
                           _selectedLng = s.lng;
                           _suggestions = [];
@@ -289,8 +380,8 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                   borderRadius: BorderRadius.all(Radius.circular(12)),
                 ),
               ),
-              items: ['Any', 'Beginner', 'Intermediate', 'Advanced']
-                  .map((level) => DropdownMenuItem(value: level, child: Text(level)))
+              items: <String>['Any', 'Beginner', 'Intermediate', 'Advanced']
+                  .map<DropdownMenuItem<String>>((level) => DropdownMenuItem<String>(value: level, child: Text(level)))
                   .toList(),
               onChanged: (value) => setState(() => requiredLevel = value!),
             ),

@@ -33,4 +33,43 @@ class MatchmakerRepository {
     
     return List<Map<String, dynamic>>.from(response);
   }
+
+  /// Recommendation Engine Rules
+  List<String> getSuggestedSports(List<String> userSports) {
+    final suggestions = <String>{};
+    
+    for (var sport in userSports) {
+      final s = sport.toLowerCase();
+      // Rules
+      if (s.contains('tenis')) suggestions.add('Padel');
+      if (s.contains('padel')) suggestions.add('Tenis');
+      if (s.contains('yol koşusu') || s.contains('trail run')) suggestions.add('Yol Bisikleti');
+      if (s.contains('yol bisikleti')) suggestions.add('Yol Koşusu');
+      if (s.contains('ağırlık antrenmanı') || s.contains('functional')) suggestions.add('Calisthenics');
+      if (s.contains('calisthenics')) suggestions.add('Functional Training');
+    }
+    
+    // Remove duplicates that user already likes
+    suggestions.removeWhere((s) => userSports.contains(s));
+    return suggestions.toList();
+  }
+
+  Future<List<Map<String, dynamic>>> getPopularSportsInCity(String province) async {
+    // This would typically be an aggregation query
+    // For now, return a mocked list or a simplified query
+    final response = await _supabase
+        .from('events')
+        .select('sports(name), location_name')
+        .ilike('location_name', '%$province%');
+        
+    // Simple count aggregation logic
+    final counts = <String, int>{};
+    for (var e in response) {
+      final name = e['sports']?['name'] as String?;
+      if (name != null) counts[name] = (counts[name] ?? 0) + 1;
+    }
+    
+    final sorted = counts.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    return sorted.take(5).map((e) => {'name': e.key, 'count': e.value}).toList();
+  }
 }

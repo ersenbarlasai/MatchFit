@@ -2,7 +2,7 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
 import '../features/auth/screens/login_screen.dart';
 import '../features/auth/screens/profile_setup_screen.dart';
-import '../features/auth/screens/sport_interests_screen.dart';
+import '../features/onboarding/screens/sports_selection_screen.dart';
 import '../features/home/screens/home_screen.dart';
 import '../features/home/screens/splash_screen.dart';
 import '../features/events/screens/create_event_screen.dart';
@@ -22,7 +22,7 @@ final GoRouter appRouter = GoRouter(
     GoRoute(path: '/', builder: (context, state) => const SplashScreen()),
     GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
     GoRoute(path: '/profile-setup', builder: (context, state) => const ProfileSetupScreen()),
-    GoRoute(path: '/sport-interests', builder: (context, state) => const SportInterestsScreen()),
+    GoRoute(path: '/sport-interests', builder: (context, state) => const SportsSelectionScreen()),
 
     // ── Main App (with shell) ──
     ShellRoute(

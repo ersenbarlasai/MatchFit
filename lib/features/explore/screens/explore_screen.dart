@@ -11,6 +11,7 @@ import '../../home/screens/home_screen.dart'; // EventCard
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:matchfit/core/services/location_service.dart';
+import 'package:matchfit/core/constants/sports_data.dart';
 import '../../events/repositories/event_repository.dart';
 
 // ── Providers ─────────────────────────────────────────────────────
@@ -23,20 +24,51 @@ class ExploreDistanceNotifier extends Notifier<String> {
 
 final exploreDistanceProvider = NotifierProvider<ExploreDistanceNotifier, String>(ExploreDistanceNotifier.new);
 
+class ExploreCategoryNotifier extends Notifier<String> {
+  @override
+  String build() => 'All Categories';
+  void setCategory(String val) => state = val;
+}
+final exploreCategoryProvider = NotifierProvider<ExploreCategoryNotifier, String>(ExploreCategoryNotifier.new);
+
 class ExploreSportNotifier extends Notifier<String> {
   @override
-  String build() => 'All';
+  String build() => 'All Sports';
   void setSport(String val) => state = val;
 }
-
 final exploreSportProvider = NotifierProvider<ExploreSportNotifier, String>(ExploreSportNotifier.new);
+
+class ExploreLevelNotifier extends Notifier<String> {
+  @override
+  String build() => 'Any Level';
+  void setLevel(String val) => state = val;
+}
+final exploreLevelProvider = NotifierProvider<ExploreLevelNotifier, String>(ExploreLevelNotifier.new);
+
+class ExploreDateNotifier extends Notifier<String> {
+  @override
+  String build() => 'Any Date';
+  void setDate(String val) => state = val;
+}
+final exploreDateProvider = NotifierProvider<ExploreDateNotifier, String>(ExploreDateNotifier.new);
+
+class ExploreSettingNotifier extends Notifier<String> {
+  @override
+  String build() => 'All Settings'; // Indoor / Outdoor / All
+  void setSetting(String val) => state = val;
+}
+final exploreSettingProvider = NotifierProvider<ExploreSettingNotifier, String>(ExploreSettingNotifier.new);
 
 final exploreMatchesProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
   final userLoc = ref.watch(userLocationProvider).value;
   final distanceStr = ref.watch(exploreDistanceProvider);
+  final selectedCategory = ref.watch(exploreCategoryProvider);
   final selectedSport = ref.watch(exploreSportProvider);
+  final selectedLevel = ref.watch(exploreLevelProvider);
+  final selectedDate = ref.watch(exploreDateProvider);
+  final selectedSetting = ref.watch(exploreSettingProvider);
   
-  double? radius = 50000; // Default 50km
+  double? radius = 50000;
   if (distanceStr == '< 5km') radius = 5000;
   if (distanceStr == '< 10km') radius = 10000;
   if (distanceStr == '< 20km') radius = 20000;
@@ -48,11 +80,47 @@ final exploreMatchesProvider = FutureProvider.autoDispose<List<Map<String, dynam
     radius: radius,
   );
 
-  if (selectedSport == 'All') return allEvents;
-  
   return allEvents.where((e) {
-    final sName = e['sports']?['name'] as String? ?? '';
-    return sName.toLowerCase() == selectedSport.toLowerCase();
+    // Category & Sport filter
+    if (selectedCategory != 'All Categories') {
+      final cat = e['category'] as String? ?? '';
+      if (cat != selectedCategory) return false;
+    }
+    if (selectedSport != 'All Sports') {
+      final sName = e['sports']?['name'] as String? ?? '';
+      if (sName != selectedSport) return false;
+    }
+
+    // Level filter
+    if (selectedLevel != 'Any Level') {
+      final level = e['required_level'] as String? ?? 'Any';
+      if (level != selectedLevel) return false;
+    }
+
+    // Date filter
+    if (selectedDate != 'Any Date') {
+      final eDateStr = e['event_date'] as String?;
+      if (eDateStr != null) {
+        final eDate = DateTime.parse(eDateStr);
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        if (selectedDate == 'Today') {
+          if (eDate != today) return false;
+        } else if (selectedDate == 'Tomorrow') {
+          final tomorrow = today.add(const Duration(days: 1));
+          if (eDate != tomorrow) return false;
+        }
+      }
+    }
+
+    // Setting filter (Indoor/Outdoor)
+    if (selectedSetting != 'All Settings') {
+      final isIndoor = e['is_indoor'] as bool? ?? false;
+      if (selectedSetting == 'Indoor' && !isIndoor) return false;
+      if (selectedSetting == 'Outdoor' && isIndoor) return false;
+    }
+
+    return true;
   }).toList();
 });
 
@@ -69,8 +137,10 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
   bool _showAdvanced = false;
   bool _mapExpanded = false;
 
-  final _sports = ['All', 'Basketball', 'Tennis', 'Running', 'Football'];
   final _distances = ['< 5km', '< 10km', '< 20km', 'Any'];
+  final _dates = ['Any Date', 'Today', 'Tomorrow'];
+  final _levels = ['Any Level', 'Beginner', 'Intermediate', 'Advanced'];
+  final _settings = ['All Settings', 'Indoor', 'Outdoor'];
 
   String _greetingTime() {
     final h = DateTime.now().hour;
@@ -143,83 +213,55 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children: [
-                    // Sport dropdown
+                    // Sport/Category filter
                     GestureDetector(
                       onTap: () => _showSportPicker(context),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0052FF).withOpacity(0.18),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: const Color(0xFF0052FF).withOpacity(0.5)),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.sports, color: Color(0xFF4D9DFF), size: 14),
-                            const SizedBox(width: 6),
-                            Text(ref.watch(exploreSportProvider),
-                                style: const TextStyle(
-                                    color: Color(0xFF4D9DFF), fontWeight: FontWeight.bold, fontSize: 13)),
-                            const SizedBox(width: 4),
-                            const Icon(Icons.keyboard_arrow_down_rounded,
-                                color: Color(0xFF4D9DFF), size: 16),
-                          ],
-                        ),
+                      child: _FilterChip(
+                        label: ref.watch(exploreSportProvider) == 'All Sports' 
+                          ? ref.watch(exploreCategoryProvider)
+                          : ref.watch(exploreSportProvider),
+                        icon: Icons.sports_tennis_outlined,
+                        isActive: ref.watch(exploreCategoryProvider) != 'All Categories',
                       ),
                     ),
                     const SizedBox(width: 8),
                     // Distance
                     GestureDetector(
                       onTap: () => _showDistancePicker(context),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF242424),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: Colors.white.withOpacity(0.1)),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.location_on_outlined, color: Colors.white.withOpacity(0.6), size: 14),
-                            const SizedBox(width: 6),
-                            Text(ref.watch(exploreDistanceProvider),
-                                style: TextStyle(
-                                    color: Colors.white.withOpacity(0.8),
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13)),
-                          ],
-                        ),
+                      child: _FilterChip(
+                        label: ref.watch(exploreDistanceProvider),
+                        icon: Icons.location_on_outlined,
+                        isActive: false,
                       ),
                     ),
                     const SizedBox(width: 8),
-                    // Advanced
+                    // Date
                     GestureDetector(
-                      onTap: () => setState(() => _showAdvanced = !_showAdvanced),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: _showAdvanced
-                              ? MatchFitTheme.accentGreen.withOpacity(0.12)
-                              : const Color(0xFF242424),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                              color: _showAdvanced
-                                  ? MatchFitTheme.accentGreen.withOpacity(0.4)
-                                  : Colors.white.withOpacity(0.1)),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.bar_chart_rounded,
-                                color: _showAdvanced ? MatchFitTheme.accentGreen : Colors.white60,
-                                size: 14),
-                            const SizedBox(width: 6),
-                            Text('Advanced',
-                                style: TextStyle(
-                                    color: _showAdvanced ? MatchFitTheme.accentGreen : Colors.white60,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13)),
-                          ],
-                        ),
+                      onTap: () => _showDatePicker(context),
+                      child: _FilterChip(
+                        label: ref.watch(exploreDateProvider),
+                        icon: Icons.calendar_today_outlined,
+                        isActive: ref.watch(exploreDateProvider) != 'Any Date',
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Setting (Indoor/Outdoor)
+                    GestureDetector(
+                      onTap: () => _showSettingPicker(context),
+                      child: _FilterChip(
+                        label: ref.watch(exploreSettingProvider),
+                        icon: Icons.door_front_door_outlined,
+                        isActive: ref.watch(exploreSettingProvider) != 'All Settings',
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Level
+                    GestureDetector(
+                      onTap: () => _showLevelPicker(context),
+                      child: _FilterChip(
+                        label: ref.watch(exploreLevelProvider),
+                        icon: Icons.trending_up,
+                        isActive: ref.watch(exploreLevelProvider) != 'Any Level',
                       ),
                     ),
                     const SizedBox(width: 20),
@@ -310,34 +352,131 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
       backgroundColor: const Color(0xFF1E1E1E),
       isScrollControlled: true,
       useSafeArea: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (_) => Consumer(
         builder: (context, ref, _) {
+          final selectedCategory = ref.watch(exploreCategoryProvider);
           final selectedSport = ref.watch(exploreSportProvider);
+          
           return Padding(
-            padding: EdgeInsets.fromLTRB(24, 16, 24,
-                MediaQuery.of(context).viewInsets.bottom + MediaQuery.of(context).padding.bottom + 24),
+            padding: EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.of(context).padding.bottom + 24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Center(
-                  child: Container(width: 36, height: 4,
-                      decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2))),
-                ),
+                Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)))),
                 const SizedBox(height: 20),
-                const Text('Select Sport',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Select Category', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+                    if (selectedCategory != 'All Categories')
+                      TextButton(
+                        onPressed: () {
+                          ref.read(exploreCategoryProvider.notifier).setCategory('All Categories');
+                          ref.read(exploreSportProvider.notifier).setSport('All Sports');
+                          Navigator.pop(context);
+                        },
+                        child: const Text('Reset', style: TextStyle(color: MatchFitTheme.accentGreen)),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: sportsData.map((cat) {
+                      final active = cat.name == selectedCategory;
+                      return GestureDetector(
+                        onTap: () {
+                          ref.read(exploreCategoryProvider.notifier).setCategory(cat.name);
+                          ref.read(exploreSportProvider.notifier).setSport('All Sports');
+                        },
+                        child: Container(
+                          margin: const EdgeInsets.only(right: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: active ? MatchFitTheme.accentGreen.withOpacity(0.15) : Colors.transparent,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: active ? MatchFitTheme.accentGreen : Colors.white.withOpacity(0.1)),
+                          ),
+                          child: Text(cat.name, style: TextStyle(color: active ? MatchFitTheme.accentGreen : Colors.white60, fontWeight: FontWeight.bold, fontSize: 12)),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+                if (selectedCategory != 'All Categories') ...[
+                  const SizedBox(height: 24),
+                  const Text('Select Sub-branch', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: sportsData.firstWhere((c) => c.name == selectedCategory).subcategories.map((s) {
+                      final active = s == selectedSport;
+                      return GestureDetector(
+                        onTap: () {
+                          ref.read(exploreSportProvider.notifier).setSport(s);
+                          Navigator.pop(context);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: active ? MatchFitTheme.accentGreen : const Color(0xFF2A2A2A),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(s, style: TextStyle(color: active ? Colors.black : Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+                const SizedBox(height: 20),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _showDatePicker(BuildContext context) {
+    _showSimplePicker(context, 'Select Date', _dates, exploreDateProvider, (ref, val) => ref.read(exploreDateProvider.notifier).setDate(val));
+  }
+
+  void _showLevelPicker(BuildContext context) {
+    _showSimplePicker(context, 'Skill Level', _levels, exploreLevelProvider, (ref, val) => ref.read(exploreLevelProvider.notifier).setLevel(val));
+  }
+
+  void _showSettingPicker(BuildContext context) {
+    _showSimplePicker(context, 'Environment', _settings, exploreSettingProvider, (ref, val) => ref.read(exploreSettingProvider.notifier).setSetting(val));
+  }
+
+  void _showSimplePicker(BuildContext context, String title, List<String> options, dynamic provider, Function(WidgetRef, String) onSelect) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1E1E1E),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (_) => Consumer(
+        builder: (context, ref, _) {
+          final current = ref.watch(provider);
+          return Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
                 const SizedBox(height: 16),
                 Wrap(
                   spacing: 10,
                   runSpacing: 10,
-                  children: _sports.map((s) {
-                    final active = s == selectedSport;
+                  children: options.map((o) {
+                    final active = o == current;
                     return GestureDetector(
                       onTap: () {
-                        ref.read(exploreSportProvider.notifier).setSport(s);
+                        onSelect(ref, o);
                         Navigator.pop(context);
                       },
                       child: Container(
@@ -346,76 +485,49 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                           color: active ? MatchFitTheme.accentGreen : const Color(0xFF2A2A2A),
                           borderRadius: BorderRadius.circular(20),
                         ),
-                        child: Text(s,
-                            style: TextStyle(
-                                color: active ? Colors.black : Colors.white70,
-                                fontWeight: FontWeight.bold)),
+                        child: Text(o, style: TextStyle(color: active ? Colors.black : Colors.white70, fontWeight: FontWeight.bold)),
                       ),
                     );
                   }).toList(),
                 ),
+                const SizedBox(height: 20),
               ],
             ),
           );
-        }
+        },
       ),
     );
   }
 
   void _showDistancePicker(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF1E1E1E),
-      isScrollControlled: true,
-      useSafeArea: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (_) => Consumer(
-        builder: (context, ref, _) {
-          final selectedDistance = ref.watch(exploreDistanceProvider);
-          return Padding(
-            padding: EdgeInsets.fromLTRB(24, 16, 24,
-                MediaQuery.of(context).viewInsets.bottom + MediaQuery.of(context).padding.bottom + 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(width: 36, height: 4,
-                      decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2))),
-                ),
-                const SizedBox(height: 20),
-                const Text('Max Distance',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: _distances.map((d) {
-                    final active = d == selectedDistance;
-                    return GestureDetector(
-                      onTap: () {
-                        ref.read(exploreDistanceProvider.notifier).setDistance(d);
-                        Navigator.pop(context);
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: active ? MatchFitTheme.accentGreen : const Color(0xFF2A2A2A),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(d,
-                            style: TextStyle(
-                                color: active ? Colors.black : Colors.white70,
-                                fontWeight: FontWeight.bold)),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ],
-            ),
-          );
-        }
+    _showSimplePicker(context, 'Max Distance', _distances, exploreDistanceProvider, (ref, val) => ref.read(exploreDistanceProvider.notifier).setDistance(val));
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool isActive;
+
+  const _FilterChip({required this.label, required this.icon, required this.isActive});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: isActive ? MatchFitTheme.accentGreen.withOpacity(0.12) : const Color(0xFF242424),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: isActive ? MatchFitTheme.accentGreen.withOpacity(0.4) : Colors.white.withOpacity(0.1)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: isActive ? MatchFitTheme.accentGreen : Colors.white60, size: 14),
+          const SizedBox(width: 6),
+          Text(label, style: TextStyle(color: isActive ? MatchFitTheme.accentGreen : Colors.white60, fontWeight: FontWeight.bold, fontSize: 13)),
+          const SizedBox(width: 4),
+          Icon(Icons.keyboard_arrow_down_rounded, color: isActive ? MatchFitTheme.accentGreen : Colors.white30, size: 14),
+        ],
       ),
     );
   }
