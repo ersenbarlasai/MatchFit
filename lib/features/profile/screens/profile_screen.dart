@@ -6,18 +6,20 @@ import 'package:matchfit/core/widgets/avatar_widget.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:math' as math;
 import '../../auth/repositories/auth_repository.dart';
+import '../repositories/social_repository.dart';
 
 // ── Providers ──────────────────────────────────────────────────────
 
-final profileDataProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) async {
-  final user = ref.read(authRepositoryProvider).currentUser;
-  if (user == null) return {};
+final profileDataProvider = FutureProvider.autoDispose.family<Map<String, dynamic>, String?>((ref, userId) async {
+  final targetId = userId ?? ref.read(authRepositoryProvider).currentUser?.id;
+  if (targetId == null) return {};
+  
   final sb = Supabase.instance.client;
 
-  final profile = await sb.from('profiles').select('full_name, trust_score, avatar_url').eq('id', user.id).maybeSingle();
-  final hosted = await sb.from('events').select('id, status').eq('host_id', user.id);
-  final joined = await sb.from('event_participants').select('id').eq('user_id', user.id);
-  final posts  = await sb.from('posts').select('id').eq('user_id', user.id);
+  final profile = await sb.from('profiles').select('full_name, trust_score, avatar_url').eq('id', targetId).maybeSingle();
+  final hosted = await sb.from('events').select('id, status').eq('host_id', targetId);
+  final joined = await sb.from('event_participants').select('id').eq('user_id', targetId);
+  final posts  = await sb.from('posts').select('id').eq('user_id', targetId);
 
   final hostedList = List<Map<String, dynamic>>.from(hosted);
   final completed = hostedList.where((e) => e['status'] == 'completed').length;
@@ -27,7 +29,7 @@ final profileDataProvider = FutureProvider.autoDispose<Map<String, dynamic>>((re
     'full_name': profile?['full_name'] ?? 'Player',
     'trust_score': profile?['trust_score'] ?? 100,
     'avatar_url': profile?['avatar_url'] as String? ?? '',
-    'user_id': user.id,
+    'user_id': targetId,
     'events_joined': (joined as List).length,
     'events_hosted': hostedList.length,
     'completion_pct': completionPct,
@@ -35,10 +37,41 @@ final profileDataProvider = FutureProvider.autoDispose<Map<String, dynamic>>((re
   };
 });
 
+final userPostsProvider = FutureProvider.autoDispose.family<List<Map<String, dynamic>>, String?>((ref, userId) async {
+  final targetId = userId ?? ref.read(authRepositoryProvider).currentUser?.id;
+  if (targetId == null) return [];
+
+  final response = await Supabase.instance.client
+      .from('posts')
+      .select('*, events(title, sports(name))')
+      .eq('user_id', targetId)
+      .order('created_at', ascending: false);
+  
+  return List<Map<String, dynamic>>.from(response);
+});
+
+final userPastEventsProvider = FutureProvider.autoDispose.family<List<Map<String, dynamic>>, String?>((ref, userId) async {
+  final targetId = userId ?? ref.read(authRepositoryProvider).currentUser?.id;
+  if (targetId == null) return [];
+
+  final response = await Supabase.instance.client
+      .from('event_participants')
+      .select('events(*, sports(name), profiles(full_name, avatar_url))')
+      .eq('user_id', targetId)
+      .eq('status', 'joined')
+      .lt('events.event_date', DateTime.now().toIso8601String())
+      .order('created_at', ascending: false);
+  
+  // Filter out null events (if any inner join issue)
+  final list = List<Map<String, dynamic>>.from(response);
+  return list.where((item) => item['events'] != null).map((item) => item['events'] as Map<String, dynamic>).toList();
+});
+
 // ── Profile Screen ─────────────────────────────────────────────────
 
 class ProfileScreen extends ConsumerStatefulWidget {
-  const ProfileScreen({super.key});
+  final String? userId;
+  const ProfileScreen({super.key, this.userId});
 
   @override
   ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
@@ -70,25 +103,73 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
 
   @override
   Widget build(BuildContext context) {
-    final dataAsync = ref.watch(profileDataProvider);
+    final dataAsync = ref.watch(profileDataProvider(widget.userId));
+    final relationshipAsync = widget.userId != null 
+        ? ref.watch(relationshipStatusProvider(widget.userId!))
+        : const AsyncValue.data(null);
+    final isBlockedAsync = widget.userId != null
+        ? ref.watch(isBlockedByProvider(widget.userId!))
+        : const AsyncValue.data(false);
 
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
-      body: dataAsync.when(
+      body: isBlockedAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Error: $e')),
-        data: (data) => _buildBody(data),
+        data: (isBlocked) {
+          if (isBlocked) {
+            return _buildBlockedUI();
+          }
+          return dataAsync.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (e, _) => Center(child: Text('Error: $e')),
+            data: (data) => _buildBody(data, relationshipAsync.value),
+          );
+        },
       ),
     );
   }
 
-  Widget _buildBody(Map<String, dynamic> data) {
+  Widget _buildBlockedUI() {
+    return Column(
+      children: [
+        AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
+            onPressed: () => context.pop(),
+          ),
+        ),
+        Expanded(
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.block_flipped, size: 64, color: Colors.white.withOpacity(0.1)),
+                const SizedBox(height: 16),
+                const Text('User not found',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+                const SizedBox(height: 8),
+                Text('This profile is private or you have been blocked.',
+                    style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 13)),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBody(Map<String, dynamic> data, String? relationshipStatus) {
     final name = data['full_name'] as String;
     final trustScore = data['trust_score'] as int;
     final joined = data['events_joined'] as int;
     final hosted = data['events_hosted'] as int;
     final completion = data['completion_pct'] as int;
     final userId = data['user_id'] as String? ?? '';
+    final isMe = widget.userId == null || widget.userId == ref.read(authRepositoryProvider).currentUser?.id;
+
     // Use local state if user already changed avatar, else use DB value
     final avatarUrl = _avatarUrl ?? (data['avatar_url'] as String? ?? '');
 
@@ -99,7 +180,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           backgroundColor: const Color(0xFF121212),
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back, color: Colors.white),
+            icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
             onPressed: () {
               if (context.canPop()) {
                 context.pop();
@@ -108,26 +189,40 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               }
             },
           ),
-          title: const Text('Profile',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          title: Text(isMe ? 'My Profile' : 'Player Profile',
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
           actions: [
-            IconButton(icon: const Icon(Icons.share_outlined, color: Colors.white), onPressed: () {}),
-            IconButton(
-              icon: const Icon(Icons.settings_outlined, color: Colors.white),
-              onPressed: () => context.push('/privacy-settings'),
-            ),
+            if (isMe)
+              IconButton(
+                icon: const Icon(Icons.settings_outlined, color: Colors.white),
+                onPressed: () => context.push('/privacy-settings'),
+              )
+            else
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert, color: Colors.white),
+                onSelected: (value) async {
+                  if (value == 'block') {
+                    await ref.read(socialRepositoryProvider).blockUser(userId);
+                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('User blocked')));
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(value: 'block', child: Text('Block User', style: TextStyle(color: Colors.red))),
+                ],
+              ),
+            const SizedBox(width: 8),
           ],
         ),
         SliverToBoxAdapter(
           child: Column(
             children: [
               const SizedBox(height: 8),
-              // ── Avatar (editable) ──
+              // ── Avatar (editable only if isMe) ──
               AvatarWidget(
                 name: name,
                 radius: 46,
                 avatarUrl: avatarUrl.isNotEmpty ? avatarUrl : null,
-                editable: true,
+                editable: isMe,
                 userId: userId,
                 onUploaded: (url) => setState(() => _avatarUrl = url),
               ),
@@ -153,16 +248,40 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   children: [
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: () {},
+                        onPressed: () async {
+                          if (isMe) {
+                            // Edit profile logic
+                          } else {
+                            if (relationshipStatus == 'following') {
+                              await ref.read(socialRepositoryProvider).unfollowUser(userId);
+                            } else if (relationshipStatus == 'pending') {
+                              await ref.read(socialRepositoryProvider).unfollowUser(userId); // Cancel request
+                            } else {
+                              await ref.read(socialRepositoryProvider).sendFollowRequest(userId);
+                            }
+                          }
+                        },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: MatchFitTheme.accentGreen,
-                          foregroundColor: Colors.black,
+                          backgroundColor: isMe 
+                              ? MatchFitTheme.accentGreen 
+                              : (relationshipStatus == 'following' ? const Color(0xFF1E1E1E) : MatchFitTheme.accentGreen),
+                          foregroundColor: isMe || relationshipStatus != 'following' ? Colors.black : Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 13),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(24),
+                            side: (isMe || relationshipStatus != 'following') 
+                                ? BorderSide.none 
+                                : BorderSide(color: Colors.white.withOpacity(0.1)),
+                          ),
                           elevation: 0,
                         ),
-                        child: const Text('Edit Profile',
-                            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
+                        child: Text(
+                          isMe 
+                              ? 'Edit Profile' 
+                              : (relationshipStatus == 'following' 
+                                  ? 'Following' 
+                                  : (relationshipStatus == 'pending' ? 'Pending' : 'Follow')),
+                          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -175,9 +294,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                           padding: const EdgeInsets.symmetric(vertical: 13),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                         ),
-                        icon: const Icon(Icons.person_add_outlined, size: 16),
-                        label: const Text('Invite',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                        icon: Icon(isMe ? Icons.person_add_outlined : Icons.mail_outline, size: 16),
+                        label: Text(isMe ? 'Invite' : 'Message',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                       ),
                     ),
                   ],
@@ -231,8 +350,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       body: TabBarView(
         controller: _tabController,
         children: [
-          _PostsGrid(),
-          _PastEventsTab(),
+          _PostsGrid(userId: widget.userId),
+          _PastEventsTab(userId: widget.userId),
           _BadgesTab(),
           _FriendsTab(),
         ],
@@ -427,120 +546,142 @@ class _StatCard extends StatelessWidget {
 
 // ── Tab Contents ──────────────────────────────────────────────────
 
-class _PostsGrid extends StatelessWidget {
-  final List<_PostItem> _items = const [
-    _PostItem(sport: 'Tennis', icon: Icons.sports_tennis, color: Color(0xFF1A3A2A)),
-    _PostItem(sport: '10k Run', icon: Icons.directions_run, color: Color(0xFF1A1A3A)),
-    _PostItem(sport: 'Weekend Warrior', icon: Icons.emoji_events_outlined, color: Color(0xFF2A2A0A), isBadge: true),
-    _PostItem(sport: '5v5', icon: Icons.sports_soccer, color: Color(0xFF2A1A0A)),
-  ];
+class _PostsGrid extends ConsumerWidget {
+  final String? userId;
+  const _PostsGrid({required this.userId});
 
   @override
-  Widget build(BuildContext context) {
-    return GridView.builder(
-      padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-        childAspectRatio: 1.0,
-      ),
-      itemCount: _items.length,
-      itemBuilder: (context, index) => _PostCard(item: _items[index]),
-    );
-  }
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final postsAsync = ref.watch(userPostsProvider(userId));
 
-class _PostItem {
-  final String sport;
-  final IconData icon;
-  final Color color;
-  final bool isBadge;
-  const _PostItem({required this.sport, required this.icon, required this.color, this.isBadge = false});
-}
-
-class _PostCard extends StatelessWidget {
-  final _PostItem item;
-  const _PostCard({required this.item});
-
-  @override
-  Widget build(BuildContext context) {
-    if (item.isBadge) {
-      return Container(
-        decoration: BoxDecoration(
-          color: item.color,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: MatchFitTheme.accentGreen.withOpacity(0.4)),
-          boxShadow: [
-            BoxShadow(color: MatchFitTheme.accentGreen.withOpacity(0.1), blurRadius: 12, spreadRadius: 2),
-          ],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: MatchFitTheme.accentGreen.withOpacity(0.15),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(item.icon, color: MatchFitTheme.accentGreen, size: 28),
-            ),
-            const SizedBox(height: 10),
-            Text(item.sport,
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-            const SizedBox(height: 4),
-            Text('Unlocked yesterday',
-                style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 10)),
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        color: item.color,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Stack(
-        children: [
-          // BG pattern / icon
-          Positioned.fill(
-            child: Icon(item.icon, color: Colors.white.withOpacity(0.04), size: 80),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(12),
+    return postsAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator(color: MatchFitTheme.accentGreen)),
+      error: (e, _) => Center(child: Text('Error: $e', style: const TextStyle(color: Colors.white24))),
+      data: (posts) {
+        if (posts.isEmpty) {
+          return Center(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.end,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(item.icon, color: Colors.white70, size: 14),
-                        const SizedBox(width: 4),
-                        Text(item.sport,
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                      ],
-                    ),
-                    Icon(Icons.favorite_border, color: Colors.white54, size: 16),
-                  ],
-                ),
+                Icon(Icons.grid_on_outlined, size: 48, color: Colors.white.withOpacity(0.1)),
+                const SizedBox(height: 12),
+                Text('No posts yet', style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 14)),
               ],
             ),
+          );
+        }
+        return GridView.builder(
+          padding: const EdgeInsets.all(16),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 8,
+            mainAxisSpacing: 8,
+            childAspectRatio: 1.0,
           ),
-        ],
-      ),
+          itemCount: posts.length,
+          itemBuilder: (context, index) {
+            final post = posts[index];
+            final mediaUrl = post['media_url'] as String?;
+            final sport = post['events']?['sports']?['name'] as String? ?? 'Sport';
+
+            return Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E1E1E),
+                borderRadius: BorderRadius.circular(12),
+                image: mediaUrl != null ? DecorationImage(image: NetworkImage(mediaUrl), fit: BoxFit.cover) : null,
+              ),
+              child: mediaUrl == null
+                  ? Center(child: Icon(_getSportIcon(sport), color: Colors.white10, size: 32))
+                  : null,
+            );
+          },
+        );
+      },
     );
+  }
+
+  IconData _getSportIcon(String sport) {
+    switch (sport.toLowerCase()) {
+      case 'tennis': return Icons.sports_tennis;
+      case 'running': return Icons.directions_run;
+      case 'basketball': return Icons.sports_basketball;
+      case 'football': return Icons.sports_soccer;
+      default: return Icons.sports;
+    }
   }
 }
 
 class _PastEventsTab extends ConsumerWidget {
+  final String? userId;
+  const _PastEventsTab({required this.userId});
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return const Center(child: Text('Past Events — Coming soon', style: TextStyle(color: Colors.white38)));
+    final eventsAsync = ref.watch(userPastEventsProvider(userId));
+
+    return eventsAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator(color: MatchFitTheme.accentGreen)),
+      error: (e, _) => Center(child: Text('Error: $e', style: const TextStyle(color: Colors.white24))),
+      data: (events) {
+        if (events.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.history_outlined, size: 48, color: Colors.white.withOpacity(0.1)),
+                const SizedBox(height: 12),
+                Text('No past events', style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 14)),
+              ],
+            ),
+          );
+        }
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: events.length,
+          itemBuilder: (context, index) {
+            final event = events[index];
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A1A1A),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white.withOpacity(0.05)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: MatchFitTheme.accentGreen.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.check, color: MatchFitTheme.accentGreen, size: 16),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(event['title'] ?? 'Event',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 2),
+                        Text(event['sports']?['name'] ?? 'Sport',
+                            style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                  Text(
+                    (event['event_date'] as String).substring(0, 10),
+                    style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 11),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 }
 
@@ -598,6 +739,16 @@ class _BadgesTab extends StatelessWidget {
 class _FriendsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return const Center(child: Text('Friends — Coming soon', style: TextStyle(color: Colors.white38)));
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.people_outline, size: 48, color: Colors.white.withOpacity(0.1)),
+          const SizedBox(height: 12),
+          Text('Friends feature coming soon',
+              style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 14)),
+        ],
+      ),
+    );
   }
 }

@@ -12,6 +12,7 @@ import '../features/guardian/screens/privacy_settings_screen.dart';
 import '../features/content/screens/share_event_post_screen.dart';
 import '../features/events/screens/edit_event_screen.dart';
 import '../features/profile/screens/profile_screen.dart';
+import '../features/notifications/screens/notification_screen.dart';
 import '../core/widgets/main_shell.dart';
 
 final GoRouter appRouter = GoRouter(
@@ -55,6 +56,14 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) {
         final event = state.extra as Map<String, dynamic>;
         return EditEventScreen(event: event);
+      },
+    ),
+    GoRoute(path: '/notifications', builder: (context, state) => const NotificationScreen()),
+    GoRoute(
+      path: '/user-profile',
+      builder: (context, state) {
+        final userId = state.extra as String?;
+        return ProfileScreen(userId: userId);
       },
     ),
   ],

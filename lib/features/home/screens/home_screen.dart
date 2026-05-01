@@ -7,6 +7,8 @@ import 'package:matchfit/core/widgets/avatar_widget.dart';
 import 'package:matchfit/core/providers/profile_provider.dart';
 import '../../events/repositories/event_repository.dart';
 import '../../auth/repositories/auth_repository.dart';
+import '../../notifications/repositories/notification_repository.dart';
+import '../repositories/matchmaker_repository.dart';
 import 'package:matchfit/core/services/location_service.dart';
 
 // ── Providers ──────────────────────────────────────────────────────
@@ -59,6 +61,7 @@ class HomeScreen extends ConsumerWidget {
     final eventsAsync = ref.watch(eventsProvider);
     final profileAsync = ref.watch(currentUserProfileProvider);
     final statsAsync = ref.watch(weeklyStatsProvider);
+    final unreadCount = ref.watch(unreadNotificationsCountProvider);
 
     final firstName = profileAsync.when(
       data: (p) => (p?['full_name'] as String? ?? 'Player').split(' ').first,
@@ -133,19 +136,36 @@ class HomeScreen extends ConsumerWidget {
                           ],
                         ),
                       ),
-                      Container(
-                        width: 42,
-                        height: 42,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1E1E1E),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white.withOpacity(0.08)),
-                        ),
-                        child: IconButton(
-                          padding: EdgeInsets.zero,
-                          icon: const Icon(Icons.notifications_outlined, color: Colors.white70, size: 20),
-                          onPressed: () {},
-                        ),
+                      Stack(
+                        children: [
+                          Container(
+                            width: 42,
+                            height: 42,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1E1E1E),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white.withOpacity(0.08)),
+                            ),
+                            child: IconButton(
+                              padding: EdgeInsets.zero,
+                              icon: const Icon(Icons.notifications_outlined, color: Colors.white70, size: 20),
+                              onPressed: () => context.push('/notifications'),
+                            ),
+                          ),
+                          if (unreadCount > 0)
+                            Positioned(
+                              top: 2,
+                              right: 2,
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: const BoxDecoration(
+                                  color: MatchFitTheme.accentGreen,
+                                  shape: BoxShape.circle,
+                                ),
+                                constraints: const BoxConstraints(minWidth: 12, minHeight: 12),
+                              ),
+                            ),
+                        ],
                       ),
                     ],
                   ),
@@ -180,6 +200,37 @@ class HomeScreen extends ConsumerWidget {
                       loading: () => const _ProgressCardSkeleton(),
                       error: (_, __) => const _ProgressCardSkeleton(),
                       data: (stats) => _WeeklyProgressCard(stats: stats),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // ── Suggested Members ──
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 32, 0, 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Suggested Members',
+                        style: TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.w900, fontSize: 20)),
+                    const SizedBox(height: 14),
+                    ref.watch(suggestedMembersProvider).when(
+                      loading: () => const SizedBox(height: 100, child: Center(child: CircularProgressIndicator(color: MatchFitTheme.accentGreen))),
+                      error: (e, _) => Text('Error: $e', style: const TextStyle(color: Colors.white24)),
+                      data: (members) => SizedBox(
+                        height: 110,
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: members.length,
+                          itemBuilder: (context, index) {
+                            final member = members[index];
+                            return _SuggestedMemberCard(member: member);
+                          },
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -516,6 +567,65 @@ class EventCard extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SuggestedMemberCard extends StatelessWidget {
+  final Map<String, dynamic> member;
+  const _SuggestedMemberCard({required this.member});
+
+  @override
+  Widget build(BuildContext context) {
+    final name = member['full_name'] as String? ?? 'Player';
+    final avatarUrl = member['avatar_url'] as String?;
+    final trustScore = member['trust_score'] as int? ?? 100;
+    final userId = member['id'] as String;
+
+    return GestureDetector(
+      onTap: () => context.push('/user-profile', extra: userId),
+      child: Container(
+        width: 100,
+        margin: const EdgeInsets.only(right: 16),
+        child: Column(
+          children: [
+            Stack(
+              children: [
+                AvatarWidget(
+                  name: name,
+                  radius: 32,
+                  avatarUrl: avatarUrl,
+                  editable: false,
+                ),
+                Positioned(
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: MatchFitTheme.accentGreen,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.bolt, size: 10, color: Colors.black),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              name.split(' ').first,
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              '$trustScore Trust',
+              style: TextStyle(color: MatchFitTheme.accentGreen.withOpacity(0.7), fontSize: 10, fontWeight: FontWeight.bold),
             ),
           ],
         ),
