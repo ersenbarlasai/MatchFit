@@ -161,6 +161,36 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     );
   }
 
+  Future<bool?> _showBlockDialog(BuildContext context, String name) {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Block User', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: Text(
+          'Are you sure you want to block $name?\n\nThey will no longer be able to view your profile or events.',
+          style: TextStyle(color: Colors.white.withOpacity(0.7), height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel', style: TextStyle(color: Colors.white.withOpacity(0.5))),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade800,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Block', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildBody(Map<String, dynamic> data, String? relationshipStatus) {
     final name = data['full_name'] as String;
     final trustScore = data['trust_score'] as int;
@@ -202,17 +232,67 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 onPressed: () => context.push('/privacy-settings'),
               )
             else
-              PopupMenuButton<String>(
-                icon: const Icon(Icons.more_vert, color: Colors.white),
-                onSelected: (value) async {
-                  if (value == 'block') {
-                    await ref.read(socialRepositoryProvider).blockUser(userId);
-                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('User blocked')));
-                  }
+              Builder(
+                builder: (context) {
+                  final isBlockingAsync = ref.watch(isBlockingProvider(userId));
+                  final isBlocking = isBlockingAsync.value ?? false;
+                  return PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_vert, color: Colors.white),
+                    color: const Color(0xFF1E1E1E),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    onSelected: (value) async {
+                      if (value == 'block') {
+                        final confirmed = await _showBlockDialog(context, name);
+                        if (confirmed == true) {
+                          await ref.read(socialRepositoryProvider).blockUser(userId);
+                          ref.invalidate(isBlockingProvider(userId));
+                          ref.invalidate(isBlockedByProvider(userId));
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('$name has been blocked'),
+                                backgroundColor: Colors.red.shade800,
+                              ),
+                            );
+                          }
+                        }
+                      } else if (value == 'unblock') {
+                        await ref.read(socialRepositoryProvider).unblockUser(userId);
+                        ref.invalidate(isBlockingProvider(userId));
+                        ref.invalidate(isBlockedByProvider(userId));
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('User unblocked')),
+                          );
+                        }
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      if (isBlocking)
+                        PopupMenuItem(
+                          value: 'unblock',
+                          child: Row(
+                            children: [
+                              Icon(Icons.lock_open_outlined, color: Colors.white70, size: 18),
+                              const SizedBox(width: 12),
+                              const Text('Unblock User', style: TextStyle(color: Colors.white70)),
+                            ],
+                          ),
+                        )
+                      else
+                        PopupMenuItem(
+                          value: 'block',
+                          child: Row(
+                            children: [
+                              const Icon(Icons.block_outlined, color: Colors.redAccent, size: 18),
+                              const SizedBox(width: 12),
+                              const Text('Block User', style: TextStyle(color: Colors.redAccent)),
+                            ],
+                          ),
+                        ),
+                    ],
+                  );
                 },
-                itemBuilder: (context) => [
-                  const PopupMenuItem(value: 'block', child: Text('Block User', style: TextStyle(color: Colors.red))),
-                ],
               ),
             const SizedBox(width: 8),
           ],
@@ -359,20 +439,80 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                       ),
                     ),
                     const SizedBox(width: 12),
-                    Expanded(
-                      child: OutlinedButton.icon(
+                    if (isMe)
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () {},
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Color(0xFF2A3B6E), width: 1.5),
+                            foregroundColor: Colors.white70,
+                            padding: const EdgeInsets.symmetric(vertical: 13),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                          ),
+                          icon: const Icon(Icons.person_add_outlined, size: 16),
+                          label: const Text('Invite',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                        ),
+                      )
+                    else ...[
+                      // Message button (icon only to save space)
+                      OutlinedButton(
                         onPressed: () {},
                         style: OutlinedButton.styleFrom(
                           side: const BorderSide(color: Color(0xFF2A3B6E), width: 1.5),
                           foregroundColor: Colors.white70,
-                          padding: const EdgeInsets.symmetric(vertical: 13),
+                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                          minimumSize: Size.zero,
                         ),
-                        icon: Icon(isMe ? Icons.person_add_outlined : Icons.mail_outline, size: 16),
-                        label: Text(isMe ? 'Invite' : 'Message',
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                        child: const Icon(Icons.mail_outline, size: 20),
                       ),
-                    ),
+                      const SizedBox(width: 10),
+                      // Block / Unblock button
+                      ref.watch(isBlockingProvider(userId)).when(
+                        loading: () => const SizedBox(width: 44),
+                        error: (_, __) => const SizedBox.shrink(),
+                        data: (isBlocking) => OutlinedButton(
+                          onPressed: () async {
+                            if (isBlocking) {
+                              await ref.read(socialRepositoryProvider).unblockUser(userId);
+                              ref.invalidate(isBlockingProvider(userId));
+                              ref.invalidate(isBlockedByProvider(userId));
+                              if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('User unblocked')),
+                              );
+                            } else {
+                              final confirmed = await _showBlockDialog(context, name);
+                              if (confirmed == true) {
+                                await ref.read(socialRepositoryProvider).blockUser(userId);
+                                ref.invalidate(isBlockingProvider(userId));
+                                ref.invalidate(isBlockedByProvider(userId));
+                                if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('$name has been blocked'),
+                                    backgroundColor: Colors.red.shade800,
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(
+                              color: isBlocking ? Colors.orange.shade700 : Colors.red.shade800,
+                              width: 1.5,
+                            ),
+                            foregroundColor: isBlocking ? Colors.orange.shade400 : Colors.red.shade400,
+                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                            minimumSize: Size.zero,
+                          ),
+                          child: Icon(
+                            isBlocking ? Icons.lock_open_outlined : Icons.block_outlined,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

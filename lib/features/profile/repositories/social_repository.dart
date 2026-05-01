@@ -48,7 +48,13 @@ class SocialRepository {
     final myId = _supabase.auth.currentUser?.id;
     if (myId == null) return;
 
-    await _supabase.from('user_relationships').upsert({
+    // Remove any existing relationship in both directions first
+    await _supabase.from('user_relationships')
+        .delete()
+        .or('and(sender_id.eq.$myId,receiver_id.eq.$targetUserId),and(sender_id.eq.$targetUserId,receiver_id.eq.$myId)');
+
+    // Then insert the block record fresh
+    await _supabase.from('user_relationships').insert({
       'sender_id': myId,
       'receiver_id': targetUserId,
       'status': 'blocked',
@@ -102,6 +108,22 @@ final relationshipStatusProvider = StreamProvider.autoDispose.family<String?, St
 
 final isBlockedByProvider = FutureProvider.autoDispose.family<bool, String>((ref, targetUserId) async {
   return ref.read(socialRepositoryProvider).isBlockedBy(targetUserId);
+});
+
+// Checks if the CURRENT user has blocked the target (reverse direction)
+final isBlockingProvider = FutureProvider.autoDispose.family<bool, String>((ref, targetUserId) async {
+  final myId = Supabase.instance.client.auth.currentUser?.id;
+  if (myId == null) return false;
+
+  final response = await Supabase.instance.client
+      .from('user_relationships')
+      .select()
+      .eq('sender_id', myId)
+      .eq('receiver_id', targetUserId)
+      .eq('status', 'blocked')
+      .maybeSingle();
+
+  return response != null;
 });
 
 final incomingFollowRequestProvider = FutureProvider.autoDispose.family<bool, String>((ref, senderId) async {

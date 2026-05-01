@@ -45,6 +45,21 @@ class EventRepository {
     return List<Map<String, dynamic>>.from(response);
   }
 
+  Future<List<String>> _getBlockedIds() async {
+    final myId = _supabase.auth.currentUser?.id;
+    if (myId == null) return [];
+    
+    final response = await _supabase
+        .from('user_relationships')
+        .select('sender_id, receiver_id')
+        .eq('status', 'blocked')
+        .or('sender_id.eq.$myId,receiver_id.eq.$myId');
+    
+    return List<Map<String, dynamic>>.from(response).map((r) {
+      return (r['sender_id'] == myId ? r['receiver_id'] : r['sender_id']) as String;
+    }).toList();
+  }
+
   Future<void> joinEvent(String eventId) async {
     final user = _supabase.auth.currentUser;
     if (user == null) throw Exception('User not logged in');
@@ -57,10 +72,25 @@ class EventRepository {
       if (status == 'rejected') throw Exception('Your request to join this event was rejected.');
     }
 
+    // Block guard: check if host has blocked this user or vice versa
+    final eventData = await _supabase
+        .from('events')
+        .select('host_id')
+        .eq('id', eventId)
+        .maybeSingle();
+    
+    if (eventData != null) {
+      final hostId = eventData['host_id'] as String;
+      final blockedIds = await _getBlockedIds();
+      if (blockedIds.contains(hostId)) {
+        throw Exception('You cannot join this event.');
+      }
+    }
+
     await _supabase.from('event_participants').insert({
       'event_id': eventId,
       'user_id': user.id,
-      'status': 'pending' // Default to pending for approval system
+      'status': 'pending'
     });
   }
 
