@@ -10,7 +10,27 @@ class SocialRepository {
     final myId = _supabase.auth.currentUser?.id;
     if (myId == null) return;
 
-    await _supabase.from('user_relationships').upsert({
+    // Check if any relationship already exists to avoid duplicates
+    final existing = await _supabase
+        .from('user_relationships')
+        .select('status')
+        .eq('sender_id', myId)
+        .eq('receiver_id', targetUserId)
+        .maybeSingle();
+
+    if (existing != null) {
+      // Already exists — update status to pending if not blocked
+      if (existing['status'] != 'blocked') {
+        await _supabase
+            .from('user_relationships')
+            .update({'status': 'pending'})
+            .eq('sender_id', myId)
+            .eq('receiver_id', targetUserId);
+      }
+      return;
+    }
+
+    await _supabase.from('user_relationships').insert({
       'sender_id': myId,
       'receiver_id': targetUserId,
       'status': 'pending',
@@ -21,10 +41,12 @@ class SocialRepository {
     final myId = _supabase.auth.currentUser?.id;
     if (myId == null) return;
 
+    // Delete the relationship regardless of status (covers pending + following)
     await _supabase.from('user_relationships')
         .delete()
         .eq('sender_id', myId)
-        .eq('receiver_id', targetUserId);
+        .eq('receiver_id', targetUserId)
+        .neq('status', 'blocked'); // Never accidentally delete a block
   }
 
   Future<void> updateFollowStatus(String senderId, bool approve) async {

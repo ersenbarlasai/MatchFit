@@ -409,33 +409,37 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                             if (relationshipStatus == 'following') {
                               await ref.read(socialRepositoryProvider).unfollowUser(userId);
                             } else if (relationshipStatus == 'pending') {
-                              await ref.read(socialRepositoryProvider).unfollowUser(userId); // Cancel request
+                              await ref.read(socialRepositoryProvider).unfollowUser(userId);
                             } else {
                               await ref.read(socialRepositoryProvider).sendFollowRequest(userId);
                             }
+                            // Refresh relationship status immediately
+                            ref.invalidate(relationshipStatusProvider(userId));
                           }
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: isMe 
-                              ? MatchFitTheme.accentGreen 
-                              : (relationshipStatus == 'following' ? const Color(0xFF1E1E1E) : MatchFitTheme.accentGreen),
+                          backgroundColor: isMe
+                              ? MatchFitTheme.accentGreen
+                              : (relationshipStatus == 'following'
+                                  ? const Color(0xFF1E1E1E)
+                                  : MatchFitTheme.accentGreen),
                           foregroundColor: isMe || relationshipStatus != 'following' ? Colors.black : Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 13),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(24),
-                            side: (isMe || relationshipStatus != 'following') 
-                                ? BorderSide.none 
+                            side: (isMe || relationshipStatus != 'following')
+                                ? BorderSide.none
                                 : BorderSide(color: Colors.white.withOpacity(0.1)),
                           ),
                           elevation: 0,
                         ),
                         child: Text(
-                          isMe 
-                              ? 'Edit Profile' 
-                              : (relationshipStatus == 'following' 
-                                  ? 'Following' 
-                                  : (relationshipStatus == 'pending' ? 'Pending' : 'Follow')),
-                          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
+                            isMe
+                                ? 'Edit Profile'
+                                : (relationshipStatus == 'following'
+                                    ? 'Following ✓'
+                                    : (relationshipStatus == 'pending' ? 'Pending…' : 'Follow')),
+                            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
                       ),
                     ),
                     const SizedBox(width: 12),
