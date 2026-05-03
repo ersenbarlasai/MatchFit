@@ -118,6 +118,30 @@ class SocialRepository {
     });
     return response as bool? ?? false;
   }
+
+  Future<void> sendPartnershipRequest(String targetUserId) async {
+    final myId = _supabase.auth.currentUser?.id;
+    if (myId == null) return;
+
+    await _supabase.from('user_partnerships').upsert({
+      'sender_id': myId,
+      'receiver_id': targetUserId,
+      'status': 'pending',
+    }, onConflict: 'sender_id, receiver_id');
+  }
+
+  Future<String?> getPartnershipStatus(String targetUserId) async {
+    final myId = _supabase.auth.currentUser?.id;
+    if (myId == null) return null;
+
+    final response = await _supabase
+        .from('user_partnerships')
+        .select('status')
+        .or('and(sender_id.eq.$myId,receiver_id.eq.$targetUserId),and(sender_id.eq.$targetUserId,receiver_id.eq.$myId)')
+        .maybeSingle();
+    
+    return response?['status'] as String?;
+  }
 }
 
 final socialRepositoryProvider = Provider<SocialRepository>((ref) {
@@ -146,6 +170,10 @@ final isBlockingProvider = FutureProvider.autoDispose.family<bool, String>((ref,
       .maybeSingle();
 
   return response != null;
+});
+
+final partnershipStatusProvider = FutureProvider.autoDispose.family<String?, String>((ref, targetUserId) async {
+  return ref.read(socialRepositoryProvider).getPartnershipStatus(targetUserId);
 });
 
 final incomingFollowRequestProvider = FutureProvider.autoDispose.family<bool, String>((ref, senderId) async {

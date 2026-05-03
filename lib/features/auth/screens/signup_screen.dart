@@ -15,6 +15,8 @@ class SignupScreen extends ConsumerStatefulWidget {
 class _SignupScreenState extends ConsumerState<SignupScreen> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
+  final _cityController = TextEditingController();
+  final _districtController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   
@@ -32,7 +34,11 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
       return;
     }
     
-    if (_emailController.text.isEmpty || _passwordController.text.isEmpty || _nameController.text.isEmpty) {
+    if (_emailController.text.isEmpty || 
+        _passwordController.text.isEmpty || 
+        _nameController.text.isEmpty ||
+        _cityController.text.isEmpty ||
+        _districtController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(t.pleaseFillAllFields)),
       );
@@ -59,6 +65,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
       try {
         await authRepo.upsertProfile({
           'full_name': _nameController.text.trim(),
+          'city': _cityController.text.trim(),
+          'district': _districtController.text.trim(),
         });
       } catch (e) {
         // Ignore profile creation errors at this stage if it fails
@@ -143,6 +151,28 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 label: t.emailAddress,
                 icon: Icons.mail_outline,
                 keyboardType: TextInputType.emailAddress,
+              ),
+              const SizedBox(height: 16),
+
+              // City & District Row
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildTextField(
+                      controller: _cityController,
+                      label: t.province,
+                      icon: Icons.location_city_outlined,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildTextField(
+                      controller: _districtController,
+                      label: t.district,
+                      icon: Icons.map_outlined,
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
               

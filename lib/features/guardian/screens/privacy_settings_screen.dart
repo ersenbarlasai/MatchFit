@@ -13,12 +13,14 @@ class PrivacySettingsState {
   final int hideLocationRadius;
   final bool isLoading;
   final bool isSaved;
+  final bool isPrivateAccount;
 
   const PrivacySettingsState({
     this.profileVisibility = 'public',
     this.hideLocationRadius = 0,
     this.isLoading = false,
     this.isSaved = false,
+    this.isPrivateAccount = false,
   });
 
   PrivacySettingsState copyWith({
@@ -26,12 +28,14 @@ class PrivacySettingsState {
     int? hideLocationRadius,
     bool? isLoading,
     bool? isSaved,
+    bool? isPrivateAccount,
   }) {
     return PrivacySettingsState(
       profileVisibility: profileVisibility ?? this.profileVisibility,
       hideLocationRadius: hideLocationRadius ?? this.hideLocationRadius,
       isLoading: isLoading ?? this.isLoading,
       isSaved: isSaved ?? this.isSaved,
+      isPrivateAccount: isPrivateAccount ?? this.isPrivateAccount,
     );
   }
 }
@@ -53,16 +57,17 @@ class PrivacySettingsNotifier extends Notifier<PrivacySettingsState> {
     state = PrivacySettingsState(
       profileVisibility: data?['profile_visibility'] ?? 'public',
       hideLocationRadius: data?['hide_location_radius'] ?? 0,
+      isPrivateAccount: data?['profile_visibility'] == 'private',
       isLoading: false,
     );
   }
 
-  void setVisibility(String value) {
-    state = state.copyWith(profileVisibility: value, isSaved: false);
-  }
-
-  void setHideRadius(int value) {
-    state = state.copyWith(hideLocationRadius: value, isSaved: false);
+  void togglePrivate(bool value) {
+    state = state.copyWith(
+      isPrivateAccount: value,
+      profileVisibility: value ? 'private' : 'public',
+      isSaved: false
+    );
   }
 
   Future<void> save() async {
@@ -107,253 +112,118 @@ class _PrivacySettingsScreenState extends ConsumerState<PrivacySettingsScreen> {
     final notifier = ref.read(privacySettingsProvider.notifier);
 
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: const Color(0xFF0F0F0F),
       appBar: AppBar(
-        title: Text(AppLocalizations.of(context).privacySettings,
-            style: TextStyle(fontWeight: FontWeight.bold)),
-        elevation: 0,
         backgroundColor: Colors.transparent,
-        actions: [
-          if (!settings.isLoading)
-            Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: TextButton.icon(
-                onPressed: () async {
-                  await notifier.save();
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Row(
-                          children: [
-                            const Icon(Icons.shield_outlined, color: Colors.black),
-                            const SizedBox(width: 8),
-                            const Text('@Guardian: Ayarlar kaydedildi!'),
-                          ],
-                        ),
-                        backgroundColor: MatchFitTheme.accentGreen,
-                      ),
-                    );
-                  }
-                },
-                icon: const Icon(Icons.save_outlined,
-                    color: MatchFitTheme.accentGreen, size: 18),
-                label: Text(AppLocalizations.of(context).save,
-                    style: TextStyle(
-                        color: MatchFitTheme.accentGreen,
-                        fontWeight: FontWeight.bold)),
-              ),
-            ),
-        ],
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
+          onPressed: () => context.pop(),
+        ),
+        title: const Text('Ayarlar ve Gizlilik',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+        centerTitle: false,
       ),
       body: settings.isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator(color: MatchFitTheme.accentGreen))
           : ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
               children: [
-                // Guardian Agent Banner
-                Container(
-                  margin: const EdgeInsets.only(bottom: 24),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        MatchFitTheme.primaryBlue.withOpacity(0.3),
-                        MatchFitTheme.primaryBlue.withOpacity(0.1),
-                      ],
+                const SizedBox(height: 20),
+                
+                // --- SECTION: ACCOUNT ---
+                _SectionHeader(title: 'Hesap'),
+                _SettingsGroup(
+                  children: [
+                    _SettingsTile(
+                      icon: Icons.person_outline,
+                      title: 'Profili Düzenle',
+                      onTap: () {},
                     ),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                        color: MatchFitTheme.primaryBlue.withOpacity(0.4)),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: MatchFitTheme.primaryBlue.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(Icons.security_outlined,
-                            color: MatchFitTheme.primaryBlue, size: 22),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('@Guardian Asistanı',
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: MatchFitTheme.primaryBlue,
-                                    fontSize: 13)),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Bu ayarlar verilerinizi kimlerin görebileceğini kontrol eder. Değişiklikler anında uygulanır.',
-                              style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.white.withOpacity(0.7)),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                    _SettingsTile(
+                      icon: Icons.notifications_none_rounded,
+                      title: 'Bildirimler',
+                      onTap: () {},
+                    ),
+                  ],
                 ),
 
-                // Section: Language
-                _SectionHeader(icon: Icons.language, title: 'Uygulama Dili / Language'),
-                const SizedBox(height: 12),
-                Consumer(
-                  builder: (context, ref, child) {
-                    final currentLocale = ref.watch(localeProvider);
-                    final notifier = ref.read(localeProvider.notifier);
+                // --- SECTION: PRIVACY ---
+                _SectionHeader(title: 'Gizlilik ve Görünürlük'),
+                _SettingsGroup(
+                  children: [
+                    _SettingsSwitchTile(
+                      icon: Icons.visibility_outlined,
+                      title: 'Açık Profil',
+                      subtitle: 'Başkalarının seni bulmasına izin ver',
+                      value: !settings.isPrivateAccount,
+                      onChanged: (v) => notifier.togglePrivate(!v),
+                    ),
+                    _SettingsTile(
+                      icon: Icons.location_searching_rounded,
+                      title: 'Konum Gizliliği',
+                      subtitle: settings.hideLocationRadius > 0 
+                          ? '${settings.hideLocationRadius}m Gizleme Aktif' 
+                          : 'Tam Konum Açık',
+                      onTap: () {},
+                    ),
+                    _SettingsSwitchTile(
+                      icon: Icons.lock_outline,
+                      title: 'Gizli Hesap',
+                      subtitle: 'Sadece onaylı takipçiler gönderilerini görür',
+                      value: settings.isPrivateAccount,
+                      onChanged: notifier.togglePrivate,
+                    ),
+                  ],
+                ),
 
-                    return Container(
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.surface,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.white.withOpacity(0.08)),
-                      ),
-                      child: Column(
-                        children: [
-                          RadioListTile<String>(
-                            value: 'tr',
-                            groupValue: currentLocale.languageCode,
-                            activeColor: MatchFitTheme.accentGreen,
-                            title: const Text('Türkçe (TR)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                            onChanged: (val) {
-                              if (val != null) notifier.setLocale(val);
-                            },
-                          ),
-                          Divider(color: Colors.white.withOpacity(0.05), height: 1),
-                          RadioListTile<String>(
-                            value: 'en',
-                            groupValue: currentLocale.languageCode,
-                            activeColor: MatchFitTheme.accentGreen,
-                            title: const Text('English (EN)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                            onChanged: (val) {
-                              if (val != null) notifier.setLocale(val);
-                            },
-                          ),
-                        ],
-                      ),
-                    );
-                  },
+                // --- SECTION: SECURITY ---
+                _SectionHeader(title: 'Güvenlik'),
+                _SettingsGroup(
+                  children: [
+                    _SettingsTile(
+                      icon: Icons.key_outlined,
+                      title: 'Şifre Değiştir',
+                      onTap: () {},
+                    ),
+                    _SettingsTile(
+                      icon: Icons.verified_user_outlined,
+                      title: 'İki Faktörlü Doğrulama',
+                      subtitle: 'Kapalı - Kurmak için dokun',
+                      onTap: () {},
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 32),
 
-                // Section: Profile Visibility
-                _SectionHeader(icon: Icons.person_outline, title: 'Profil Görünürlüğü'),
-                const SizedBox(height: 12),
-                _VisibilityOption(
-                  icon: Icons.public,
-                  title: 'Herkese Açık',
-                  subtitle: 'Profilinizi ve etkinliklerinizi herkes görebilir.',
-                  value: 'public',
-                  groupValue: settings.profileVisibility,
-                  onChanged: notifier.setVisibility,
-                ),
-                _VisibilityOption(
-                  icon: Icons.people_outline,
-                  title: 'Sadece Arkadaşlar',
-                  subtitle: 'Sadece onaylı arkadaşlarınız tam profilinizi görebilir.',
-                  value: 'friends_only',
-                  groupValue: settings.profileVisibility,
-                  onChanged: notifier.setVisibility,
-                ),
-                _VisibilityOption(
-                  icon: Icons.lock_outline,
-                  title: 'Gizli',
-                  subtitle: 'Profiliniz gizlidir. Etkinliklere yine de katılabilirsiniz.',
-                  value: 'private',
-                  groupValue: settings.profileVisibility,
-                  onChanged: notifier.setVisibility,
+                // --- SECTION: APPEARANCE ---
+                _SectionHeader(title: 'Görünüm'),
+                _SettingsGroup(
+                  children: [
+                    _SettingsTile(
+                      icon: Icons.dark_mode_outlined,
+                      title: 'Tema',
+                      subtitle: 'Karanlık Mod',
+                      onTap: () {},
+                    ),
+                    _SettingsTile(
+                      icon: Icons.language_rounded,
+                      title: 'Dil',
+                      subtitle: 'Türkçe (TR)',
+                      onTap: () {},
+                    ),
+                  ],
                 ),
 
                 const SizedBox(height: 32),
-
-                // Section: Location Privacy (Strava-style)
-                _SectionHeader(
-                    icon: Icons.location_on_outlined,
-                    title: 'Konum Gizliliği (Ev Alanı)'),
-                const SizedBox(height: 8),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Text(
-                    'Seçtiğiniz yarıçap içindeki konumunuz gizlenir (Örn: evinizin etrafı).',
-                    style: TextStyle(
-                        fontSize: 13, color: Colors.white.withOpacity(0.5)),
-                  ),
-                ),
-                // Radius Selector Chips
-                Wrap(
-                  spacing: 8,
-                  children: [0, 250, 500, 1000, 2000].map((radius) {
-                    final isSelected =
-                        settings.hideLocationRadius == radius;
-                    final label = radius == 0
-                        ? 'Kapalı'
-                        : '${radius >= 1000 ? '${radius ~/ 1000} km' : '$radius m'}';
-                    return ChoiceChip(
-                      label: Text(label),
-                      selected: isSelected,
-                      selectedColor: MatchFitTheme.accentGreen,
-                      labelStyle: TextStyle(
-                        color: isSelected ? Colors.black : Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      backgroundColor:
-                          Theme.of(context).colorScheme.surface,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20)),
-                      onSelected: (_) => notifier.setHideRadius(radius),
-                    );
-                  }).toList(),
-                ),
-
-                const SizedBox(height: 32),
-
-                // Section: Content Moderation
-                _SectionHeader(
-                    icon: Icons.shield_moon_outlined,
-                    title: 'İçerik Denetimi'),
-                const SizedBox(height: 12),
-                _InfoTile(
-                  icon: Icons.sms_failed_outlined,
-                  iconColor: Colors.orangeAccent,
-                  title: 'Risk ve Dolandırıcılık Taraması',
-                  subtitle:
-                      '@Guardian Asistanı mesajları IBAN, telefon numarası ve şüpheli linklere karşı tarar. Her zaman aktiftir.',
-                  badge: 'AKTİF',
-                ),
-                const SizedBox(height: 12),
-                _InfoTile(
-                  icon: Icons.no_adult_content,
-                  iconColor: Colors.redAccent,
-                  title: 'Küfür Filtresi',
-                  subtitle:
-                      'Etkinlik başlıklarında ve açıklamalardaki argo kelimeler otomatik olarak engellenir.',
-                  badge: 'AKTİF',
-                ),
-
-                const SizedBox(height: 32),
-
-                // Section: Account
-                _SectionHeader(
-                    icon: Icons.manage_accounts_outlined,
-                    title: 'Hesap Yönetimi'),
-                const SizedBox(height: 12),
-                _LogoutTile(),
-
+                
+                // Logout Button
+                _LogoutButton(onTap: () => _handleLogout(context, ref)),
+                
                 const SizedBox(height: 40),
               ],
             ),
     );
   }
-}
-
-class _LogoutTile extends ConsumerWidget {
-  const _LogoutTile();
 
   Future<void> _handleLogout(BuildContext context, WidgetRef ref) async {
     final confirmed = await showDialog<bool>(
@@ -361,8 +231,7 @@ class _LogoutTile extends ConsumerWidget {
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E1E),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(AppLocalizations.of(context).logOut, 
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text('Çıkış Yap', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         content: Text(
           'Hesabınızdan çıkış yapmak istediğinize emin misiniz?',
           style: TextStyle(color: Colors.white.withOpacity(0.7), height: 1.5),
@@ -370,7 +239,7 @@ class _LogoutTile extends ConsumerWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text(AppLocalizations.of(context).cancel, style: TextStyle(color: Colors.white.withOpacity(0.5))),
+            child: Text('İptal', style: TextStyle(color: Colors.white.withOpacity(0.5))),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -379,7 +248,7 @@ class _LogoutTile extends ConsumerWidget {
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            child: Text(AppLocalizations.of(context).logOut, style: const TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text('Çıkış Yap', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -387,204 +256,141 @@ class _LogoutTile extends ConsumerWidget {
 
     if (confirmed == true) {
       await ref.read(authRepositoryProvider).signOut();
-      if (context.mounted) {
-        context.go('/login');
-      }
+      if (context.mounted) context.go('/login');
     }
-  }
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
-      ),
-      child: ListTile(
-        onTap: () => _handleLogout(context, ref),
-        leading: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.red.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: const Icon(Icons.logout_rounded, color: Color(0xFFFF4B4B), size: 20),
-        ),
-        title: Text(AppLocalizations.of(context).logOut,
-            style: TextStyle(color: Color(0xFFFF4B4B), fontWeight: FontWeight.bold)),
-        subtitle: Text('Oturumunuzu sonlandırın.',
-            style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12)),
-        trailing: Icon(Icons.arrow_forward_ios, color: Colors.white.withOpacity(0.1), size: 14),
-      ),
-    );
   }
 }
 
-// ── Reusable Widgets ──────────────────────────────────────────────
+// --- REUSABLE COMPONENTS ---
 
 class _SectionHeader extends StatelessWidget {
-  final IconData icon;
   final String title;
-  const _SectionHeader({required this.icon, required this.title});
+  const _SectionHeader({required this.title});
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, color: MatchFitTheme.accentGreen, size: 20),
-        const SizedBox(width: 8),
-        Text(title,
-            style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-                color: Colors.white)),
-      ],
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 12, top: 12),
+      child: Text(
+        title,
+        style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+      ),
     );
   }
 }
 
-class _VisibilityOption extends StatelessWidget {
+class _SettingsGroup extends StatelessWidget {
+  final List<Widget> children;
+  const _SettingsGroup({required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1A),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
+      ),
+      child: Column(
+        children: children.asMap().entries.map((entry) {
+          final isLast = entry.key == children.length - 1;
+          return Column(
+            children: [
+              entry.value,
+              if (!isLast) Divider(color: Colors.white.withOpacity(0.05), height: 1, indent: 56),
+            ],
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+class _SettingsTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final VoidCallback onTap;
+
+  const _SettingsTile({
+    required this.icon,
+    required this.title,
+    this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      onTap: onTap,
+      leading: Icon(icon, color: Colors.white70, size: 22),
+      title: Text(title, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500)),
+      subtitle: subtitle != null 
+          ? Text(subtitle!, style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 12)) 
+          : null,
+      trailing: const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white24, size: 14),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+    );
+  }
+}
+
+class _SettingsSwitchTile extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
-  final String value;
-  final String groupValue;
-  final void Function(String) onChanged;
+  final bool value;
+  final ValueChanged<bool> onChanged;
 
-  const _VisibilityOption({
+  const _SettingsSwitchTile({
     required this.icon,
     required this.title,
     required this.subtitle,
     required this.value,
-    required this.groupValue,
     required this.onChanged,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isSelected = value == groupValue;
-    return GestureDetector(
-      onTap: () => onChanged(value),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? MatchFitTheme.accentGreen.withOpacity(0.08)
-              : Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isSelected
-                ? MatchFitTheme.accentGreen
-                : Colors.white.withOpacity(0.08),
-            width: isSelected ? 2 : 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(icon,
-                color: isSelected
-                    ? MatchFitTheme.accentGreen
-                    : Colors.white54,
-                size: 22),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title,
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: isSelected
-                              ? MatchFitTheme.accentGreen
-                              : Colors.white)),
-                  const SizedBox(height: 2),
-                  Text(subtitle,
-                      style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.white.withOpacity(0.5))),
-                ],
-              ),
-            ),
-            Radio<String>(
-              value: value,
-              groupValue: groupValue,
-              onChanged: (v) => onChanged(v!),
-              activeColor: MatchFitTheme.accentGreen,
-            ),
-          ],
-        ),
+    return ListTile(
+      leading: Icon(icon, color: Colors.white70, size: 22),
+      title: Text(title, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500)),
+      subtitle: Text(subtitle, style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 12)),
+      trailing: Switch(
+        value: value,
+        onChanged: onChanged,
+        activeColor: MatchFitTheme.accentGreen,
+        activeTrackColor: MatchFitTheme.accentGreen.withOpacity(0.2),
       ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
     );
   }
 }
 
-class _InfoTile extends StatelessWidget {
-  final IconData icon;
-  final Color iconColor;
-  final String title;
-  final String subtitle;
-  final String badge;
-
-  const _InfoTile({
-    required this.icon,
-    required this.iconColor,
-    required this.title,
-    required this.subtitle,
-    required this.badge,
-  });
+class _LogoutButton extends StatelessWidget {
+  final VoidCallback onTap;
+  const _LogoutButton({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: iconColor, size: 22),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(title,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white)),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: MatchFitTheme.accentGreen.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(badge,
-                          style: const TextStyle(
-                              fontSize: 10,
-                              color: MatchFitTheme.accentGreen,
-                              fontWeight: FontWeight.bold)),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(subtitle,
-                    style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.white.withOpacity(0.5))),
-              ],
-            ),
-          ),
-        ],
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.red.withOpacity(0.2)),
+          color: Colors.red.withOpacity(0.05),
+        ),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.logout_rounded, color: Color(0xFFFF4B4B), size: 20),
+            SizedBox(width: 12),
+            Text('Çıkış Yap', style: TextStyle(color: Color(0xFFFF4B4B), fontWeight: FontWeight.bold, fontSize: 16)),
+          ],
+        ),
       ),
     );
   }

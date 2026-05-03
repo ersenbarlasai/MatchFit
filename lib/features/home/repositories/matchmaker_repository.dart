@@ -46,21 +46,30 @@ class MatchmakerRepository {
 
       final suggestionsResponse = await _supabase
           .from('user_sports_preferences')
-          .select('profiles(*)')
-          .filter('sport_id', 'in', mySportIds)
+          .select('user_id')
+          .inFilter('sport_id', mySportIds)
           .neq('user_id', currentUser.id)
+          .limit(50);
+
+      final matchingUserIds = (suggestionsResponse as List)
+          .map((e) => e['user_id'] as String)
+          .toSet()
+          .toList();
+
+      if (matchingUserIds.isEmpty) return [];
+
+      final profilesResponse = await _supabase
+          .from('profiles')
+          .select('*')
+          .inFilter('id', matchingUserIds)
           .limit(20);
 
-      final seenIds = <String>{};
       final List<Map<String, dynamic>> finalSuggestions = [];
       
-      for (final item in suggestionsResponse) {
-        final profile = item['profiles'] as Map<String, dynamic>?;
-        if (profile != null && !seenIds.contains(profile['id'])) {
-          seenIds.add(profile['id']);
-          profile['shared_sports'] = []; // Fallback için boş dizi
-          finalSuggestions.add(profile);
-        }
+      for (final profileData in profilesResponse) {
+        final profile = Map<String, dynamic>.from(profileData);
+        profile['shared_sports'] = []; // Fallback için boş dizi
+        finalSuggestions.add(profile);
       }
 
       return finalSuggestions.take(10).toList();

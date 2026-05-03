@@ -115,7 +115,10 @@ class _AvatarWidgetState extends State<AvatarWidget> {
 
   @override
   Widget build(BuildContext context) {
-    final hasImage = _localUrl != null && _localUrl!.isNotEmpty;
+    final rawUrl = _localUrl ?? widget.avatarUrl;
+    // Only trust Supabase Storage URLs — external URLs fail on Flutter Web CanvasKit
+    final isSupabaseUrl = rawUrl != null && rawUrl.contains('supabase.co');
+    final hasImage = isSupabaseUrl;
 
     return GestureDetector(
       onTap: widget.editable ? _pickAndUpload : null,
@@ -148,7 +151,7 @@ class _AvatarWidgetState extends State<AvatarWidget> {
                     )
                   : hasImage
                       ? Image.network(
-                          _localUrl!,
+                          rawUrl!,
                           fit: BoxFit.cover,
                           width: widget.radius * 2,
                           height: widget.radius * 2,

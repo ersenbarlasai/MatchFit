@@ -1,0 +1,126 @@
+-- =========================================
+-- MATCHFIT SEED SYSTEM - GÜNCELLENMİŞ VERSİYON
+-- =========================================
+
+-- 1. MEVCUT TABLOLARA SEED KOLONLARINI EKLE
+ALTER TABLE public.profiles 
+  ADD COLUMN IF NOT EXISTS is_seed BOOLEAN DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS seed_batch_id TEXT;
+
+ALTER TABLE public.events 
+  ADD COLUMN IF NOT EXISTS is_seed BOOLEAN DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS seed_batch_id TEXT;
+
+ALTER TABLE public.event_participants 
+  ADD COLUMN IF NOT EXISTS is_seed BOOLEAN DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS seed_batch_id TEXT;
+
+-- 2. ŞEHİR VE İLÇE TABLOLARI
+CREATE TABLE IF NOT EXISTS public.cities (
+  id SERIAL PRIMARY KEY,
+  name TEXT,
+  lat DOUBLE PRECISION,
+  lng DOUBLE PRECISION
+);
+
+CREATE TABLE IF NOT EXISTS public.districts (
+  id SERIAL PRIMARY KEY,
+  city_id INT REFERENCES cities(id) ON DELETE CASCADE,
+  name TEXT,
+  lat DOUBLE PRECISION,
+  lng DOUBLE PRECISION
+);
+
+TRUNCATE public.cities, public.districts RESTART IDENTITY CASCADE;
+
+INSERT INTO public.cities (name, lat, lng) VALUES
+('İstanbul',41.0082,28.9784),
+('Ankara',39.9208,32.8541),
+('İzmir',38.4237,27.1428),
+('Bursa',40.1950,29.0600),
+('Antalya',36.8969,30.7133);
+
+INSERT INTO public.districts (city_id, name, lat, lng)
+SELECT
+  c.id,
+  c.name || ' İlçe ' || gs,
+  c.lat + (random()-0.5)/5,
+  c.lng + (random()-0.5)/5
+FROM public.cities c,
+generate_series(1, 10) gs;
+
+-- =========================================
+-- 3. USERS SEED (MatchFit Yapısına Uygun)
+-- =========================================
+
+-- Rastgele bir batch_id belirliyoruz (Tüm veriler buna bağlanacak)
+DO $$
+DECLARE 
+  batch_id TEXT := 'seed_matchfit_test_01';
+BEGIN
+
+  -- A. SAHTE PROFİLLERİ EKLE
+  INSERT INTO public.profiles (
+    id, full_name, city, district, lat, lng, 
+    avatar_url, trust_score, is_seed, seed_batch_id
+  )
+  SELECT
+    gen_random_uuid(),
+    (ARRAY['Ahmet','Mehmet','Ayşe','Elif','Mert','Zeynep','Burak','Canan'])[floor(random()*8)+1] || ' ' || floor(random()*1000),
+    c.name,
+    d.name,
+    d.lat,
+    d.lng,
+    'https://i.pravatar.cc/150?img=' || floor(random()*70+1)::int,
+    floor(random()*40 + 60)::int, -- 60 ile 100 arası trust score
+    TRUE,
+    batch_id
+  FROM public.cities c
+  JOIN public.districts d ON d.city_id = c.id
+  LIMIT 100;
+
+  -- B. SAHTE KULLANICILARA SPOR İLGİ ALANLARI EKLE (MATCHMAKER İÇİN ŞART)
+  -- Sistemdeki mevcut sporlardan (eğer sports tablonuzda veri varsa) rastgele atama yapar
+  INSERT INTO public.user_sports_preferences (user_id, sport_id, skill_level)
+  SELECT 
+    p.id,
+    s.id,
+    (ARRAY['beginner', 'intermediate', 'advanced'])[floor(random()*3)+1]
+  FROM public.profiles p
+  CROSS JOIN LATERAL (
+    SELECT id FROM public.sports ORDER BY random() LIMIT (floor(random()*3)+1)::int -- Her kullanıcıya 1-3 spor
+  ) s
+  WHERE p.is_seed = TRUE AND p.seed_batch_id = batch_id;
+
+  -- C. SAHTE ETKİNLİKLER EKLE
+  INSERT INTO public.events (
+    id, title, city, lat, lng, start_time,
+    host_id, sport_id, status, max_participants,
+    is_seed, seed_batch_id
+  )
+  SELECT
+    gen_random_uuid(),
+    s.name || ' Etkinliği ' || floor(random()*100),
+    p.city,
+    p.lat + (random()-0.5)/10,
+    p.lng + (random()-0.5)/10,
+    NOW() + (random()*'5 days'::interval),
+    p.id,
+    s.id,
+    'open',
+    floor(random()*10 + 2)::int,
+    TRUE,
+    batch_id
+  FROM public.profiles p
+  -- Kullanıcının seçtiği bir sporu etkinlik için baz al
+  JOIN public.user_sports_preferences usp ON usp.user_id = p.id
+  JOIN public.sports s ON s.id = usp.sport_id
+  WHERE p.is_seed = TRUE AND p.seed_batch_id = batch_id
+  LIMIT 300;
+
+END $$;
+
+
+İşiniz bittiğinde tüm test verilerini silmek için (eklediğimiz spor ilgi alanları da veritabanındaki Cascade yapısı sayesinde otomatik silinir):
+DELETE FROM public.events WHERE is_seed = TRUE;
+DELETE FROM public.profiles WHERE is_seed = TRUE;

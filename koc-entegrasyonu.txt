@@ -1,0 +1,406 @@
+🧠 1. COACH SİSTEMİNİN TEMEL FELSEFESİ
+
+Koç = “Verified Professional”
+
+Bu yüzden sistem 3 şeye dayanmalı:
+
+Kimlik doğrulama
+Yetkinlik doğrulama
+Sürekli performans takibi
+
+👉 Yani sadece “kayıt olan” değil,
+👉 “sürekli denetlenen” kullanıcı
+
+🧩 2. KOÇ KAYIT AKIŞI (MULTI-STEP FLOW)
+
+Normal kullanıcıdan tamamen ayrı bir onboarding olmalı.
+
+🧾 STEP 1: BAŞVURU
+
+Kullanıcı “Koç Ol” butonuna basar:
+
+Form:
+
+Ad Soyad
+Branş (örn: Tenis, Fitness)
+Alt branş
+Deneyim yılı
+Kısa biyografi
+🪪 STEP 2: KİMLİK DOĞRULAMA
+
+Burada ciddiyet başlar:
+
+TC Kimlik yükleme (ön/arka)
+Selfie doğrulama
+Telefon doğrulama
+
+👉 (İleri aşamada Mernis / KYC API entegrasyonu yapılabilir)
+
+🎓 STEP 3: BELGE YÜKLEME
+
+Zorunlu alanlar:
+
+Antrenörlük belgesi
+Sertifika (opsiyonel ama puan kazandırır)
+Diploma (varsa)
+📍 STEP 4: ÇALIŞMA ALANI
+Çalıştığı spor salonu / tesis
+Konum seçimi
+Harita pin
+
+👉 Fake koçların %80’i burada elenir
+
+📹 STEP 5: TANITIM VİDEOSU (GAME CHANGER)
+
+Bu çok kritik:
+
+30–60 sn video
+Kendini tanıtıyor
+Nasıl eğitim verdiğini anlatıyor
+
+👉 Bu, güveni 10x artırır
+
+📋 STEP 6: BAŞVURU DURUMU
+
+Durumlar:
+
+Pending
+Under Review
+Approved ✅
+Rejected ❌
+🧠 3. DOĞRULAMA SİSTEMİ (VERIFICATION ENGINE)
+🛡️ 3.1 3 KATMANLI DOĞRULAMA
+🥉 Basic Verified
+Kimlik doğrulandı
+🥈 Certified Coach
+Belgeler doğrulandı
+🥇 Elite Coach
+Performans + yorumlar yüksek
+🎯 UI GÖSTERİMİ
+Ahmet Yılmaz
+🎾 Tennis Coach
+✔ Verified
+⭐ 4.8
+🔥 120 ders
+⚖️ 4. GÜVENLİK MEKANİZMALARI
+🚨 4.1 FAKE COACH ÖNLEME
+Guardian Agent:
+Aynı belge tekrar kullanılmış mı?
+Lokasyon gerçek mi?
+Çok hızlı ders açıyor mu?
+📍 4.2 GPS + CHECK-IN
+
+Koç ders açtıysa:
+
+Koç gerçekten orada mı?
+Öğrenci check-in yaptı mı?
+📷 4.3 DERS SONU DOĞRULAMA
+Fotoğraf yükleme (opsiyonel)
+Öğrenci feedback zorunlu
+📊 5. KOÇ PERFORMANS SİSTEMİ
+📈 METRİKLER
+Katılım oranı
+No-show oranı
+Ortalama puan
+Tekrar müşteri oranı
+🎯 COACH SCORE (0–100)
+
+Alt bileşenler:
+
+Reliability
+Skill Rating
+Communication
+Attendance
+🧠 MATCHMAKER ETKİSİ
+
+Yüksek skorlu koç:
+
+Daha üstte görünür
+Daha fazla önerilir
+Premium label alır
+💰 6. PARA KAZANMA MODELİ (COACH)
+💳 MODEL 1: KOMİSYON
+Ders başına %10–20
+🏆 MODEL 2: BOOST
+
+Koç:
+
+dersini öne çıkarır
+ödeme yapar
+🎯 MODEL 3: FEATURED COACH
+
+Ana sayfada:
+
+“Öne çıkan koçlar”
+🧩 7. VERİTABANI YAPISI
+
+🤖 8. AGENT ENTEGRASYONU
+🛡️ Guardian Agent
+belge kontrolü
+sahte koç tespiti
+⚖️ Referee Agent
+ders katılım kontrolü
+puanlama
+🎯 Matchmaker Agent
+doğru öğrenci → doğru koç
+📢 Content Agent
+koçları öne çıkarır
+başarı hikayeleri
+🔥 9. UX FARK YARATAN DETAYLAR
+💡 1. “Koçla Tanış” Butonu
+mini chat
+güven artırır
+💡 2. Ders Önizleme
+video + yorumlar
+💡 3. “İlk Ders İndirimi”
+conversion artırır
+💡 4. Güven Rozeti Glow Effect
+Elite coach → altın parıltı
+⚠️ KRİTİK STRATEJİ
+
+Şunu net söyleyeyim:
+
+👉 Çok kolay koç olunursa → sistem çöker
+👉 Çok zor olursa → içerik oluşmaz
+
+Bu yüzden:
+
+başta yarı manuel onay
+sonra otomasyon
+🚀 SONUÇ
+
+Bu yapı:
+
+✅ platforma profesyonellik katar
+✅ para kazanmayı mümkün kılar
+✅ güveni artırır
+✅ sahte içerikleri yok eder
+
+
+
+============== PROMPT ==========================
+# ROLE: Senior Product Architect + Antigravity Agent Designer
+# PROJECT: MatchFit – Verified Coach System
+
+You are responsible for designing and implementing the FULL coach (trainer) system inside MatchFit.
+
+This is NOT a basic user system.
+This is a VERIFIED PROFESSIONAL SYSTEM with trust, validation, and monetization.
+
+You must build this using:
+- Database-first approach (PostgreSQL / Supabase)
+- .agents architecture
+- Persistent memory
+- Scalable verification logic
+
+---
+
+# 1. CORE OBJECTIVE
+
+Design a system where:
+
+- Users can APPLY to become a coach
+- Coaches must be VERIFIED before activation
+- Verified coaches can create PAID or FREE sessions
+- The system PREVENTS fake coaches
+- Trust, reputation, and performance are continuously evaluated
+
+---
+
+# 2. USER ROLES
+
+Create role system:
+
+- USER (default)
+- COACH_PENDING
+- COACH_VERIFIED
+- COACH_ELITE
+
+Role transitions must be controlled by system + admin + agents.
+
+---
+
+# 3. DATABASE DESIGN (MANDATORY FIRST STEP)
+
+
+
+# 4. COACH ONBOARDING FLOW
+
+Design multi-step onboarding:
+
+STEP 1 → Basic Info  
+STEP 2 → Identity Verification  
+STEP 3 → Document Upload  
+STEP 4 → Work Location  
+STEP 5 → Intro Video  
+STEP 6 → Application Submit  
+
+Each step must be stored and resumable.
+
+---
+
+# 5. AGENT SYSTEM (.agents)
+
+Create and configure following agents:
+
+---
+
+## @CoachVerificationAgent
+
+Responsibilities:
+- Validate identity documents
+- Check duplicate documents
+- Detect suspicious patterns
+- Approve/reject documents
+
+Rules:
+- Same document cannot be reused across accounts
+- Missing required documents → auto reject
+
+---
+
+## @GuardianAgent (Extended)
+
+Responsibilities:
+- Detect fake coaches
+- Validate location authenticity
+- Monitor abnormal behavior (spam sessions, unrealistic schedules)
+
+---
+
+## @RefereeAgent (Coach Mode)
+
+Responsibilities:
+- Validate session attendance (GPS check)
+- Detect no-show (coach or user)
+- Update reliability_score
+
+---
+
+## @CoachReputationAgent
+
+Responsibilities:
+- Calculate coach score (0–100)
+- Inputs:
+    - attendance rate
+    - user ratings
+    - cancellations
+    - session completion
+- Update ranking priority
+
+---
+
+## @MonetizationAgent
+
+Responsibilities:
+- Handle session pricing logic
+- Commission calculation
+- Premium visibility (boosted coaches)
+
+---
+
+# 6. VERIFICATION SYSTEM
+
+Implement 3-tier verification:
+
+- BASIC → identity verified
+- CERTIFIED → documents approved
+- ELITE → high rating + high reliability
+
+UI flag must reflect verification level.
+
+---
+
+# 7. TRUST & SCORE SYSTEM
+
+Each coach must have:
+
+- reliability_score (0–100)
+- rating_avg (1–5)
+- session_success_rate
+
+Score must update AFTER each session.
+
+---
+
+# 8. ANTI-FAKE SYSTEM
+
+Mandatory checks:
+
+- GPS validation for sessions
+- Minimum 2 participants confirmation
+- Optional photo proof
+- Document duplication detection
+
+If fraud detected:
+
+- downgrade coach
+- suspend ability to create sessions
+- log event
+
+---
+
+# 9. MONETIZATION READY STRUCTURE
+
+Prepare system for:
+
+- session commission (% based)
+- coach boosting (visibility ranking)
+- featured coach placement
+
+DO NOT implement payment gateway yet,
+but structure must support it.
+
+---
+
+# 10. UI HOOKS (IMPORTANT)
+
+Expose API-ready structures for:
+
+- Coach Profile Card
+- Coach Badge (Verified / Elite)
+- Session Cards
+- Rating Display
+- Trust Score Visualization
+
+---
+
+# 11. MEMORY & LOGGING
+
+All agent decisions must be logged in:
+
+coach_verification_logs
+
+Agents must remember:
+- past violations
+- performance trends
+- repeated suspicious behavior
+
+---
+
+# 12. OUTPUT REQUIREMENTS
+
+You must generate:
+
+1. Full SQL schema (production ready)
+2. Agent definitions (.agents files)
+3. Core logic flows
+4. Validation rules
+5. API structure (basic endpoints)
+6. Sample seed data (1–2 coaches)
+
+---
+
+# FINAL INSTRUCTION
+
+Start with:
+
+→ COMPLETE DATABASE SCHEMA (schema.sql)
+
+Then continue step-by-step:
+
+→ Agents  
+→ Logic  
+→ API  
+
+System must be modular, scalable, and production-ready.

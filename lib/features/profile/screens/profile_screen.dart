@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:math' as math;
 import '../../auth/repositories/auth_repository.dart';
 import '../repositories/social_repository.dart';
+import '../models/trust_system.dart';
 import 'package:matchfit/core/providers/profile_provider.dart';
 import 'package:matchfit/core/l10n/app_localizations.dart';
 
@@ -29,7 +30,7 @@ final profileDataProvider = FutureProvider.autoDispose.family<Map<String, dynami
   
   final sb = Supabase.instance.client;
 
-  final profile = await sb.from('profiles').select('full_name, trust_score, avatar_url').eq('id', targetId).maybeSingle();
+  final profile = await sb.from('profiles').select('full_name, trust_score, avatar_url, accepts_partnership, city, district, created_at').eq('id', targetId).maybeSingle();
   final hosted = await sb.from('events').select('id, status').eq('host_id', targetId);
   final joined = await sb.from('event_participants').select('id').eq('user_id', targetId);
   final posts  = await sb.from('posts').select('id').eq('user_id', targetId);
@@ -38,10 +39,22 @@ final profileDataProvider = FutureProvider.autoDispose.family<Map<String, dynami
   final completed = hostedList.where((e) => e['status'] == 'completed').length;
   final completionPct = hostedList.isEmpty ? 100 : ((completed / hostedList.length) * 100).round();
 
+  // Extract year from created_at
+  String joinedYear = '2024';
+  if (profile?['created_at'] != null) {
+    try {
+      joinedYear = DateTime.parse(profile!['created_at']).year.toString();
+    } catch (_) {}
+  }
+
   return {
     'full_name': profile?['full_name'] ?? 'Player',
     'trust_score': profile?['trust_score'] ?? 100,
     'avatar_url': profile?['avatar_url'] as String? ?? '',
+    'accepts_partnership': profile?['accepts_partnership'] ?? true,
+    'city': profile?['city'] ?? 'Bilinmiyor',
+    'district': profile?['district'] ?? '',
+    'joined_year': joinedYear,
     'user_id': targetId,
     'events_joined': (joined as List).length,
     'events_hosted': hostedList.length,
@@ -133,10 +146,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           if (isBlocked) {
             return _buildBlockedUI();
           }
+          final partnershipAsync = widget.userId != null
+              ? ref.watch(partnershipStatusProvider(widget.userId!))
+              : const AsyncValue.data(null);
+
+          final trustAsync = ref.watch(trustScoreProvider(widget.userId ?? ref.read(authRepositoryProvider).currentUser?.id ?? ''));
+          final earnedKeys = trustAsync.whenData((d) => d.earnedBadgeKeys).asData?.value ?? const <String>[];
+
           return dataAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, _) => Center(child: Text('Error: $e')),
-            data: (data) => _buildBody(data, relationshipAsync.value),
+            data: (data) => _buildBody(data, relationshipAsync.value, partnershipAsync.value, earnedKeys),
           );
         },
       ),
@@ -244,7 +264,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     );
   }
 
-  Widget _buildBody(Map<String, dynamic> data, String? relationshipStatus) {
+  Widget _buildBody(Map<String, dynamic> data, String? relationshipStatus, String? partnershipStatus, List<String> earnedKeys) {
     final name = data['full_name'] as String;
     final trustScore = int.tryParse(data['trust_score']?.toString() ?? '') ?? 100;
     final joined = int.tryParse(data['events_joined']?.toString() ?? '') ?? 0;
@@ -252,9 +272,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     final completion = int.tryParse(data['completion_pct']?.toString() ?? '') ?? 0;
     final userId = data['user_id'] as String? ?? '';
     final isMe = widget.userId == null || widget.userId == ref.read(authRepositoryProvider).currentUser?.id;
+    final acceptsPartnership = data['accepts_partnership'] == true;
 
     // Use local state if user already changed avatar, else use DB value
-    final avatarUrl = _avatarUrl ?? (data['avatar_url'] as String? ?? '');
+    String avatarUrl = _avatarUrl ?? (data['avatar_url'] as String? ?? '');
+    if (avatarUrl.contains('pravatar.cc')) {
+      avatarUrl = 'https://api.dicebear.com/7.x/avataaars/png?seed=$userId';
+    }
     
     final incomingRequestAsync = userId.isNotEmpty 
         ? ref.watch(incomingFollowRequestProvider(userId))
@@ -280,40 +304,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
           actions: [
             if (isMe)
-              PopupMenuButton<String>(
+              IconButton(
                 icon: const Icon(Icons.settings_outlined, color: Colors.white),
-                color: const Color(0xFF1E1E1E),
-                offset: const Offset(0, 40),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                onSelected: (value) async {
-                  if (value == 'settings') {
-                    context.push('/privacy-settings');
-                  } else if (value == 'logout') {
-                    await _handleLogout();
-                  }
-                },
-                itemBuilder: (context) => [
-                  PopupMenuItem(
-                    value: 'settings',
-                    child: Row(
-                      children: [
-                        const Icon(Icons.shield_outlined, color: Colors.white70, size: 18),
-                        const SizedBox(width: 12),
-                        Text(AppLocalizations.of(context).privacySettings, style: const TextStyle(color: Colors.white70)),
-                      ],
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: 'logout',
-                    child: Row(
-                      children: [
-                        const Icon(Icons.logout_rounded, color: Color(0xFFFF4B4B), size: 18),
-                        const SizedBox(width: 12),
-                        Text(AppLocalizations.of(context).logOut, style: const TextStyle(color: Color(0xFFFF4B4B), fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                  ),
-                ],
+                onPressed: () => context.push('/privacy-settings'),
               )
             else
               Builder(
@@ -382,439 +375,499 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           ],
         ),
         SliverToBoxAdapter(
-          child: Column(
-            children: [
-              const SizedBox(height: 8),
-              // ── Avatar (editable only if isMe) ──
-              AvatarWidget(
-                name: name,
-                radius: 46,
-                avatarUrl: avatarUrl.isNotEmpty ? avatarUrl : null,
-                editable: isMe,
-                userId: userId,
-                onUploaded: (url) {
-                  setState(() => _avatarUrl = url);
-                  ref.invalidate(currentUserProfileProvider);
-                  ref.invalidate(profileDataProvider(userId));
-                },
-              ),
-              const SizedBox(height: 14),
-              // Name
-              Text(name.split(' ').first,
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 22)),
-              const SizedBox(height: 4),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.location_on_outlined, size: 14, color: Colors.white.withOpacity(0.5)),
-                  const SizedBox(width: 4),
-                  Text('MatchFit Oyuncusu',
-                      style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 13)),
-                ],
-              ),
-              const SizedBox(height: 20),
-              
-              // ── Incoming Follow Request Banner ──
-              if (incomingRequestAsync.value == true)
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: Column(
+              children: [
+                // ── Premium Profile Card ────────────────────────────────
                 Container(
-                  margin: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-                  padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: MatchFitTheme.accentGreen.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: MatchFitTheme.accentGreen.withOpacity(0.2)),
+                    color: const Color(0xFF1A1A1A),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: Colors.white.withOpacity(0.05)),
                   ),
                   child: Column(
                     children: [
-                      Row(
+                      // 1. Cover Image & Avatar Stack
+                      Stack(
+                        clipBehavior: Clip.none,
                         children: [
+                          // Cover Image
                           Container(
-                            padding: const EdgeInsets.all(8),
+                            height: 140,
+                            width: double.infinity,
                             decoration: BoxDecoration(
-                              color: MatchFitTheme.accentGreen.withOpacity(0.1),
-                              shape: BoxShape.circle,
+                              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  Colors.blue.shade900,
+                                  Colors.blue.shade600,
+                                ],
+                              ),
+                              image: const DecorationImage(
+                                image: NetworkImage('https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=1000&auto=format&fit=crop'),
+                                fit: BoxFit.cover,
+                                opacity: 0.4,
+                              ),
                             ),
-                            child: const Icon(Icons.person_add_outlined, color: MatchFitTheme.accentGreen, size: 20),
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text('$name seni takip etmek istiyor',
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                          // Avatar
+                          Positioned(
+                            bottom: -40,
+                            left: 20,
+                            child: Stack(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFF1A1A1A),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: AvatarWidget(
+                                    name: name,
+                                    radius: 50,
+                                    avatarUrl: avatarUrl.isNotEmpty ? avatarUrl : null,
+                                    editable: isMe,
+                                    userId: userId,
+                                    onUploaded: (url) {
+                                      setState(() => _avatarUrl = url);
+                                      ref.invalidate(currentUserProfileProvider);
+                                      ref.invalidate(profileDataProvider(userId));
+                                    },
+                                  ),
+                                ),
+                                // Verified Badge (Only if not me, to avoid overlap with camera icon)
+                                if (!isMe)
+                                  Positioned(
+                                    right: 0,
+                                    bottom: 0,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: const BoxDecoration(
+                                        color: MatchFitTheme.accentGreen,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(Icons.check, size: 14, color: Colors.black),
+                                    ),
+                                  ),
+                              ],
+                            ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: () async {
-                                await ref.read(socialRepositoryProvider).updateFollowStatus(userId, true);
-                                ref.invalidate(incomingFollowRequestProvider(userId));
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: MatchFitTheme.accentGreen,
-                                foregroundColor: Colors.black,
-                                padding: const EdgeInsets.symmetric(vertical: 10),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                elevation: 0,
-                              ),
-                              child: Text(AppLocalizations.of(context).accept, style: const TextStyle(fontWeight: FontWeight.bold)),
+                      
+                      const SizedBox(height: 12),
+                      
+                      // 2. Info Section (Name, Location, Buttons)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(135, 0, 20, 20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Text(name.split(' ').first,
+                                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 24)),
+                                          const SizedBox(width: 8),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: Colors.blue.withOpacity(0.15),
+                                              borderRadius: BorderRadius.circular(12),
+                                            ),
+                                            child: const Row(
+                                              children: [
+                                                Icon(Icons.emoji_events_outlined, size: 12, color: Colors.blue),
+                                                SizedBox(width: 4),
+                                                Text('Elite Player', style: TextStyle(color: Colors.blue, fontSize: 10, fontWeight: FontWeight.bold)),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text('${data['city']}, ${data['district']} • Katıldı ${data['joined_year']}',
+                                          style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 13)),
+                                      const SizedBox(height: 8),
+                                      // Mini Badges Row
+                                      Wrap(
+                                        spacing: 6,
+                                        children: kAllBadges.take(6).map((badge) {
+                                          final earned = earnedKeys.contains(badge.key);
+                                          return Opacity(
+                                            opacity: earned ? 1.0 : 0.25,
+                                            child: Icon(
+                                              badge.icon,
+                                              size: 14,
+                                              color: earned ? badge.color : Colors.white,
+                                            ),
+                                          );
+                                        }).toList(),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                
+                                // Follow Button (Only if not me)
+                                if (!isMe)
+                                  ElevatedButton(
+                                    onPressed: () async {
+                                      if (relationshipStatus == 'following') {
+                                        await ref.read(socialRepositoryProvider).unfollowUser(userId);
+                                      } else if (relationshipStatus == 'pending') {
+                                        await ref.read(socialRepositoryProvider).unfollowUser(userId);
+                                      } else {
+                                        await ref.read(socialRepositoryProvider).sendFollowRequest(userId);
+                                      }
+                                      ref.invalidate(relationshipStatusProvider(userId));
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: relationshipStatus != 'following' 
+                                          ? MatchFitTheme.accentGreen 
+                                          : const Color(0xFF2A2A2A),
+                                      foregroundColor: relationshipStatus != 'following' ? Colors.black : Colors.white,
+                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                                      minimumSize: const Size(0, 36),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                                      elevation: 0,
+                                    ),
+                                    child: Text(
+                                        relationshipStatus == 'following' ? 'Following' : 'Follow',
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                  ),
+                              ],
                             ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: () async {
-                                await ref.read(socialRepositoryProvider).updateFollowStatus(userId, false);
-                                ref.invalidate(incomingFollowRequestProvider(userId));
-                              },
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.white70,
-                                side: BorderSide(color: Colors.white.withOpacity(0.1)),
-                                padding: const EdgeInsets.symmetric(vertical: 10),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              ),
-                              child: Text(AppLocalizations.of(context).reject, style: const TextStyle(fontWeight: FontWeight.bold)),
-                            ),
-                          ),
-                        ],
+                          ],
+                        ),
+                      ),
+
+                      // 3. Stats Bar
+                      Container(
+                        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+                        decoration: BoxDecoration(
+                          border: Border(top: BorderSide(color: Colors.white.withOpacity(0.05))),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            _StatItem(value: '1.2k', label: 'FOLLOWERS'),
+                            _StatItem(value: '850', label: 'FOLLOWING'),
+                            _StatItem(value: '$joined', label: 'JOINED'),
+                            _StatItem(value: '$hosted', label: 'HOSTED'),
+                          ],
+                        ),
                       ),
                     ],
                   ),
                 ),
-              // Action Buttons
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () async {
-                          if (isMe) {
-                            // Edit profile logic
-                          } else {
-                            if (relationshipStatus == 'following') {
-                              await ref.read(socialRepositoryProvider).unfollowUser(userId);
-                            } else if (relationshipStatus == 'pending') {
-                              await ref.read(socialRepositoryProvider).unfollowUser(userId);
-                            } else {
-                              await ref.read(socialRepositoryProvider).sendFollowRequest(userId);
-                            }
-                            // Refresh relationship status immediately
-                            ref.invalidate(relationshipStatusProvider(userId));
-                          }
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: isMe
-                              ? MatchFitTheme.accentGreen
-                              : (relationshipStatus == 'following'
-                                  ? const Color(0xFF1E1E1E)
-                                  : MatchFitTheme.accentGreen),
-                          foregroundColor: isMe || relationshipStatus != 'following' ? Colors.black : Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 13),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(24),
-                            side: (isMe || relationshipStatus != 'following')
-                                ? BorderSide.none
-                                : BorderSide(color: Colors.white.withOpacity(0.1)),
-                          ),
-                          elevation: 0,
-                        ),
-                        child: Text(
-                            isMe
-                                ? AppLocalizations.of(context).editProfile
-                                : (relationshipStatus == 'following'
-                                    ? 'Takip Ediliyor ✓'
-                                    : (relationshipStatus == 'pending' ? AppLocalizations.of(context).followRequested : AppLocalizations.of(context).follow)),
-                            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    if (isMe)
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () {},
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Color(0xFF2A3B6E), width: 1.5),
-                            foregroundColor: Colors.white70,
-                            padding: const EdgeInsets.symmetric(vertical: 13),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                          ),
-                          icon: const Icon(Icons.person_add_outlined, size: 16),
-                          label: const Text('Davet Et',
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                        ),
-                      )
-                    else ...[
-                      // Message button (icon only to save space)
-                      OutlinedButton(
-                        onPressed: () {},
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Color(0xFF2A3B6E), width: 1.5),
-                          foregroundColor: Colors.white70,
-                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                          minimumSize: Size.zero,
-                        ),
-                        child: const Icon(Icons.mail_outline, size: 20),
-                      ),
-                      const SizedBox(width: 10),
-                      // Block / Unblock button
-                      ref.watch(isBlockingProvider(userId)).when(
-                        loading: () => const SizedBox(width: 44),
-                        error: (_, __) => const SizedBox.shrink(),
-                        data: (isBlocking) => OutlinedButton(
-                          onPressed: () async {
-                            if (isBlocking) {
-                              await ref.read(socialRepositoryProvider).unblockUser(userId);
-                              ref.invalidate(isBlockingProvider(userId));
-                              ref.invalidate(isBlockedByProvider(userId));
-                              if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('User unblocked')),
-                              );
-                            } else {
-                              final confirmed = await _showBlockDialog(context, name);
-                              if (confirmed == true) {
-                                await ref.read(socialRepositoryProvider).blockUser(userId);
-                                ref.invalidate(isBlockingProvider(userId));
-                                ref.invalidate(isBlockedByProvider(userId));
-                                if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('$name has been blocked'),
-                                    backgroundColor: Colors.red.shade800,
-                                  ),
-                                );
-                              }
-                            }
-                          },
-                          style: OutlinedButton.styleFrom(
-                            side: BorderSide(
-                              color: isBlocking ? Colors.orange.shade700 : Colors.red.shade800,
-                              width: 1.5,
-                            ),
-                            foregroundColor: isBlocking ? Colors.orange.shade400 : Colors.red.shade400,
-                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                            minimumSize: Size.zero,
-                          ),
-                          child: Icon(
-                            isBlocking ? Icons.lock_open_outlined : Icons.block_outlined,
-                            size: 20,
-                          ),
-                        ),
-                      ),
-                    ],
+                // Tab Bar & Divider
+                const SizedBox(height: 12),
+                TabBar(
+                  controller: _tabController,
+                  labelColor: MatchFitTheme.accentGreen,
+                  unselectedLabelColor: Colors.white38,
+                  indicatorColor: MatchFitTheme.accentGreen,
+                  indicatorWeight: 2.5,
+                  indicatorSize: TabBarIndicatorSize.label,
+                  labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  tabs: const [
+                    Tab(text: 'Trust & Badges'),
+                    Tab(text: 'Interests'),
+                    Tab(text: 'Arkadaşlar'),
+                    Tab(text: 'My Posts'),
                   ],
                 ),
-              ),
-              const SizedBox(height: 24),
-              // Stats Row
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Row(
-                  children: [
-                    _StatCard(value: '$joined', label: 'KATILDIĞI\nETKİNLİKLER', accentColor: Colors.white),
-                    const SizedBox(width: 10),
-                    _StatCard(value: '$hosted', label: 'DÜZENLEDİĞİ\nETKİNLİKLER', accentColor: Colors.white),
-                    const SizedBox(width: 10),
-                    _StatCard(
-                        value: '$completion%',
-                        label: 'TAMAMLAMA',
-                        accentColor: MatchFitTheme.accentGreen),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-              // Trust Score Card
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: _TrustScoreCard(score: trustScore),
-              ),
-              const SizedBox(height: 20),
-              // Sports Interests
-              _SportsInterestsSection(userId: userId, isMe: isMe),
-              const SizedBox(height: 20),
-              // Tab Bar
-              TabBar(
-                controller: _tabController,
-                labelColor: MatchFitTheme.accentGreen,
-                unselectedLabelColor: Colors.white38,
-                indicatorColor: MatchFitTheme.accentGreen,
-                indicatorWeight: 2.5,
-                indicatorSize: TabBarIndicatorSize.label,
-                labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                tabs: [
-                  const Tab(text: 'Paylaşımlar'),
-                  Tab(text: AppLocalizations.of(context).pastEvents),
-                  const Tab(text: 'Rozetler'),
-                  Tab(text: AppLocalizations.of(context).followers),
-                ],
-              ),
-              const Divider(height: 1, color: Colors.white10),
-            ],
+                const Divider(height: 1, color: Colors.white10),
+              ],
+            ),
           ),
         ),
       ],
       body: TabBarView(
         controller: _tabController,
         children: [
-          _PostsGrid(userId: widget.userId),
-          _PastEventsTab(userId: widget.userId),
-          _BadgesTab(),
+          _TrustBadgesTab(userId: widget.userId),
+          _InterestsTab(userId: widget.userId, isMe: isMe),
           _FriendsTab(userId: widget.userId),
+          _PostsGrid(userId: widget.userId),
         ],
       ),
     );
   }
 }
 
-// ── Trust Score Card ──────────────────────────────────────────────
 
-class _TrustScoreCard extends StatelessWidget {
-  final int score;
-  const _TrustScoreCard({required this.score});
+// ── Trust Score Card 2.0 ──────────────────────────────────────────
 
+class _Trust2Card extends ConsumerWidget {
+  final String userId;
+  const _Trust2Card({required this.userId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final trustAsync = ref.watch(trustScoreProvider(userId));
+    return trustAsync.when(
+      loading: () => const _Trust2Skeleton(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (data) => _Trust2CardContent(data: data),
+    );
+  }
+}
+
+class _Trust2Skeleton extends StatelessWidget {
+  const _Trust2Skeleton();
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      height: 200,
       decoration: BoxDecoration(
         color: const Color(0xFF1A1A1A),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.06)),
+      ),
+      child: const Center(child: CircularProgressIndicator(color: MatchFitTheme.accentGreen, strokeWidth: 2)),
+    );
+  }
+}
+
+class _Trust2CardContent extends StatelessWidget {
+  final TrustScoreData data;
+  const _Trust2CardContent({required this.data});
+
+  Color get _barColor {
+    if (data.total >= 90) return const Color(0xFFFFD700);
+    if (data.total >= 70) return const Color(0xFF60A5FA);
+    if (data.total >= 40) return const Color(0xFFFBBF24);
+    return const Color(0xFFFF6B6B);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final lvl = data.levelInfo;
+    final nextLvl = kTrustLevels[data.nextLevel]!;
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1A),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: lvl.color.withOpacity(0.25)),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header row
           Row(
             children: [
-              const Icon(Icons.shield_outlined, color: MatchFitTheme.accentGreen, size: 20),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(AppLocalizations.of(context).trustScore,
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                    Text('Topluluk saygınlığı ve güvenilirlik.',
-                        style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11)),
-                  ],
+              const Icon(Icons.shield_rounded, color: MatchFitTheme.accentGreen, size: 18),
+              const SizedBox(width: 8),
+              const Text('Güven Skoru',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: lvl.color.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: lvl.color.withOpacity(0.4)),
+                ),
+                child: Text(
+                  '${lvl.emoji} ${lvl.label}',
+                  style: TextStyle(color: lvl.color, fontWeight: FontWeight.w900, fontSize: 11),
                 ),
               ),
-              _CircularScore(score: score),
             ],
           ),
-          const SizedBox(height: 20),
-          _TrustRow(icon: Icons.access_time_outlined, label: 'Dakiklik', delta: '+5', positive: true),
-          const SizedBox(height: 12),
-          _TrustRow(icon: Icons.thumb_up_outlined, label: 'İyi Sporcu', delta: '+10', positive: true),
-          const SizedBox(height: 12),
-          _TrustRow(icon: Icons.calendar_month_outlined, label: 'Geç İptal', delta: '-2', positive: false),
+          const SizedBox(height: 14),
+
+          // Main score + segmented bar
+          Row(
+            children: [
+              Text(
+                '${data.total}',
+                style: TextStyle(color: lvl.color, fontWeight: FontWeight.w900, fontSize: 38),
+              ),
+              Text(' / 100',
+                  style: TextStyle(color: Colors.white.withOpacity(0.3), fontWeight: FontWeight.bold, fontSize: 18)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _SegmentedBar(score: data.total, color: _barColor),
+          const SizedBox(height: 6),
+          // Level labels
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: TrustLevel.values.map((lvl) {
+              final info = kTrustLevels[lvl]!;
+              final isActive = data.level == lvl;
+              return Text(
+                info.label.split(' ').first.toUpperCase(),
+                style: TextStyle(
+                  color: isActive ? _barColor : Colors.white24,
+                  fontWeight: isActive ? FontWeight.w900 : FontWeight.normal,
+                  fontSize: 9,
+                  letterSpacing: 0.3,
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 16),
+          const Divider(color: Colors.white10, height: 1),
+          const SizedBox(height: 14),
+
+          // Sub scores
+          _SubScoreRow(label: 'Güvenilirlik', icon: Icons.shield_outlined, value: data.reliability, color: const Color(0xFF34D399)),
+          const SizedBox(height: 8),
+          _SubScoreRow(label: 'Sosyal', icon: Icons.favorite_outline, value: data.social, color: const Color(0xFFA78BFA)),
+          const SizedBox(height: 8),
+          _SubScoreRow(label: 'Aktiflik', icon: Icons.bolt_outlined, value: data.activity, color: const Color(0xFF60A5FA)),
+
+          // Next level hint
+          if (data.level != TrustLevel.legend) ...[
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.04),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.arrow_upward_rounded, color: nextLvl.color, size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: RichText(
+                      text: TextSpan(
+                        style: const TextStyle(fontSize: 12),
+                        children: [
+                          TextSpan(
+                            text: '${data.pointsToNextLevel} puan ',
+                            style: TextStyle(color: nextLvl.color, fontWeight: FontWeight.w900),
+                          ),
+                          TextSpan(
+                            text: '→ ${nextLvl.label}',
+                            style: TextStyle(color: Colors.white.withOpacity(0.5)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (data.streakCount > 0)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF59E0B).withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.local_fire_department_rounded, color: Color(0xFFF59E0B), size: 12),
+                          const SizedBox(width: 3),
+                          Text('${data.streakCount}',
+                              style: const TextStyle(color: Color(0xFFF59E0B), fontWeight: FontWeight.w900, fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 }
 
-class _CircularScore extends StatelessWidget {
+class _SegmentedBar extends StatelessWidget {
   final int score;
-  const _CircularScore({required this.score});
+  final Color color;
+  const _SegmentedBar({required this.score, required this.color});
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 60,
-      height: 60,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          CustomPaint(
-            size: const Size(60, 60),
-            painter: _CirclePainter(score / 100),
-          ),
-          Text(
-            '$score',
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w900,
-              fontSize: 18,
+    final segments = [20, 20, 20, 20, 15, 5]; // widths summing to 100
+    int cumulative = 0;
+    return LayoutBuilder(builder: (context, constraints) {
+      return Row(
+        children: List.generate(segments.length, (i) {
+          final segStart = cumulative;
+          final segEnd = cumulative + segments[i];
+          cumulative = segEnd;
+          final filled = (score - segStart).clamp(0, segments[i]) / segments[i];
+          final isLast = i == segments.length - 1;
+          return Expanded(
+            flex: segments[i],
+            child: Container(
+              margin: EdgeInsets.only(right: isLast ? 0 : 3),
+              height: 7,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(4),
+                color: Colors.white12,
+              ),
+              child: FractionallySizedBox(
+                widthFactor: filled.toDouble(),
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(4),
+                    color: color,
+                  ),
+                ),
+              ),
             ),
-          ),
-        ],
-      ),
-    );
+          );
+        }),
+      );
+    });
   }
 }
 
-class _CirclePainter extends CustomPainter {
-  final double progress;
-  _CirclePainter(this.progress);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2 - 4;
-
-    // BG ring
-    canvas.drawCircle(center, radius, Paint()
-      ..color = Colors.white12
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 5);
-
-    // Progress arc
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      -math.pi / 2,
-      2 * math.pi * progress,
-      false,
-      Paint()
-        ..color = MatchFitTheme.accentGreen
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 5
-        ..strokeCap = StrokeCap.round,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
-}
-
-class _TrustRow extends StatelessWidget {
-  final IconData icon;
+class _SubScoreRow extends StatelessWidget {
   final String label;
-  final String delta;
-  final bool positive;
-  const _TrustRow({required this.icon, required this.label, required this.delta, required this.positive});
+  final IconData icon;
+  final int value;
+  final Color color;
+  const _SubScoreRow({required this.label, required this.icon, required this.value, required this.color});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF242424),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: Colors.white60, size: 18),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(label,
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14)),
-          ),
-          Text(
-            delta,
-            style: TextStyle(
-              color: positive ? MatchFitTheme.accentGreen : const Color(0xFFFF6B6B),
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
+    return Row(
+      children: [
+        Icon(icon, color: color, size: 14),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 78,
+          child: Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+        ),
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: value / 100,
+              backgroundColor: Colors.white10,
+              valueColor: AlwaysStoppedAnimation<Color>(color),
+              minHeight: 5,
             ),
           ),
-        ],
-      ),
+        ),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 28,
+          child: Text('$value', style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12)),
+        ),
+      ],
     );
   }
 }
+
+
+
 
 // ── Stat Card ─────────────────────────────────────────────────────
 
@@ -849,6 +902,23 @@ class _StatCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _StatItem extends StatelessWidget {
+  final String value;
+  final String label;
+  const _StatItem({required this.value, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
+        const SizedBox(height: 4),
+        Text(label, style: TextStyle(color: Colors.white.withOpacity(0.4), fontWeight: FontWeight.bold, fontSize: 10, letterSpacing: 0.5)),
+      ],
     );
   }
 }
@@ -994,56 +1064,241 @@ class _PastEventsTab extends ConsumerWidget {
   }
 }
 
-class _BadgesTab extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final badges = [
-      {'icon': Icons.emoji_events_outlined, 'name': 'Weekend Warrior', 'desc': 'Joined 5 weekend events'},
-      {'icon': Icons.thumb_up_outlined, 'name': 'Good Sport', 'desc': 'Received 10 positive ratings'},
-      {'icon': Icons.bolt_outlined, 'name': 'Quick Joiner', 'desc': 'Joined an event within 1 hour'},
-    ];
+class _BadgesTab extends ConsumerWidget {
+  final String? userId;
+  const _BadgesTab({required this.userId});
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: badges.length,
-      itemBuilder: (context, index) {
-        final badge = badges[index];
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1A1A1A),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: MatchFitTheme.accentGreen.withOpacity(0.2)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: MatchFitTheme.accentGreen.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(badge['icon'] as IconData, color: MatchFitTheme.accentGreen),
-              ),
-              const SizedBox(width: 14),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(badge['name'] as String,
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 2),
-                  Text(badge['desc'] as String,
-                      style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12)),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final trustAsync = ref.watch(trustScoreProvider(userId));
+    return trustAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator(color: MatchFitTheme.accentGreen)),
+      error: (_, __) => _BadgesContent(earnedKeys: const []),
+      data: (data) => _BadgesContent(earnedKeys: data.earnedBadgeKeys),
     );
   }
 }
+
+class _BadgesContent extends StatelessWidget {
+  final List<String> earnedKeys;
+  const _BadgesContent({required this.earnedKeys});
+
+  BadgeDef? get _featuredBadge {
+    // Show first earned badge, or first badge if none earned
+    for (final b in kAllBadges) {
+      if (earnedKeys.contains(b.key)) return b;
+    }
+    return kAllBadges.isNotEmpty ? kAllBadges.first : null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final featured = _featuredBadge;
+    final featuredEarned = featured != null && earnedKeys.contains(featured.key);
+
+    return SingleChildScrollView(
+      primary: true,
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Header ──────────────────────────────────
+          const Text('Rozet Koleksiyonu',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 26)),
+          const SizedBox(height: 6),
+          Text(
+            'Maçları tamamlayarak, yüksek güven skoru tutturarak ve streak\'lere hâkim olarak rozet kazan.',
+            style: TextStyle(color: Colors.white.withOpacity(0.45), fontSize: 13, height: 1.45),
+          ),
+          const SizedBox(height: 20),
+
+          // ── Featured Badge Card ──────────────────────
+          if (featured != null)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
+              decoration: BoxDecoration(
+                color: const Color(0xFF161616),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: featuredEarned ? featured.color.withOpacity(0.5) : Colors.white12,
+                ),
+                boxShadow: featuredEarned
+                    ? [BoxShadow(color: featured.color.withOpacity(0.2), blurRadius: 24, spreadRadius: 2)]
+                    : null,
+              ),
+              child: Column(
+                children: [
+                  // Glowing icon circle
+                  Container(
+                    width: 90, height: 90,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: const Color(0xFF1E1E1E),
+                      border: Border.all(
+                        color: featuredEarned ? featured.color.withOpacity(0.7) : Colors.white12,
+                        width: 2.5,
+                      ),
+                      boxShadow: featuredEarned
+                          ? [BoxShadow(color: featured.color.withOpacity(0.35), blurRadius: 20, spreadRadius: 4)]
+                          : null,
+                    ),
+                    child: Icon(
+                      featured.icon,
+                      color: featuredEarned ? featured.color : Colors.white24,
+                      size: 36,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    featuredEarned ? 'ACTIVE' : 'LOCKED',
+                    style: TextStyle(
+                      color: featuredEarned ? MatchFitTheme.accentGreen : Colors.white30,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 11,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(featured.name,
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 22)),
+                  const SizedBox(height: 4),
+                  Text(featured.requirement,
+                      style: TextStyle(color: Colors.white.withOpacity(0.45), fontSize: 13)),
+                ],
+              ),
+            ),
+
+          const SizedBox(height: 28),
+
+          // ── All Badges grid ──────────────────────────
+          const Text('All Badges',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
+          const SizedBox(height: 14),
+
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 5,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              childAspectRatio: 1.0,
+            ),
+            itemCount: kAllBadges.length,
+            itemBuilder: (context, i) {
+              final badge = kAllBadges[i];
+              final earned = earnedKeys.contains(badge.key);
+              return _BadgeIconCell(badge: badge, earned: earned);
+            },
+          ),
+
+          const SizedBox(height: 28),
+
+          // ── Badge detail list ─────────────────────────
+          ...kAllBadges.map((badge) {
+            final earned = earnedKeys.contains(badge.key);
+            return _BadgeListRow(badge: badge, earned: earned);
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+class _BadgeIconCell extends StatelessWidget {
+  final BadgeDef badge;
+  final bool earned;
+  const _BadgeIconCell({required this.badge, required this.earned});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      decoration: BoxDecoration(
+        color: earned ? badge.color.withOpacity(0.12) : const Color(0xFF1C1C1C),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: earned ? badge.color.withOpacity(0.5) : Colors.white10,
+          width: earned ? 1.5 : 1,
+        ),
+        boxShadow: earned
+            ? [BoxShadow(color: badge.color.withOpacity(0.25), blurRadius: 8, spreadRadius: 1)]
+            : null,
+      ),
+      child: Center(
+        child: Icon(
+          earned ? badge.icon : Icons.lock_rounded,
+          color: earned ? badge.color : Colors.white.withOpacity(0.2),
+          size: earned ? 22 : 16,
+        ),
+      ),
+    );
+  }
+}
+
+class _BadgeListRow extends StatelessWidget {
+  final BadgeDef badge;
+  final bool earned;
+  const _BadgeListRow({required this.badge, required this.earned});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF161616),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: earned ? badge.color.withOpacity(0.25) : Colors.white.withOpacity(0.05),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36, height: 36,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: earned ? badge.color.withOpacity(0.15) : Colors.white.withOpacity(0.04),
+            ),
+            child: Icon(
+              earned ? badge.icon : Icons.lock_rounded,
+              color: earned ? badge.color : Colors.white.withOpacity(0.2),
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  badge.name,
+                  style: TextStyle(
+                    color: earned ? Colors.white : Colors.white38,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  badge.requirement,
+                  style: TextStyle(
+                    color: earned ? Colors.white.withOpacity(0.45) : Colors.white.withOpacity(0.2),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+
 
 class _FriendsTab extends ConsumerWidget {
   final String? userId;
@@ -1067,7 +1322,7 @@ class _FriendsTab extends ConsumerWidget {
               children: [
                 Icon(Icons.people_outline, size: 48, color: Colors.white.withOpacity(0.1)),
                 const SizedBox(height: 12),
-                Text('No friends yet', style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 14)),
+                Text('Henüz arkadaş yok', style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 14)),
               ],
             ),
           );
@@ -1088,7 +1343,7 @@ class _FriendsTab extends ConsumerWidget {
               ),
               title: Text(profile['full_name'] ?? 'Player',
                   style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
-              subtitle: Text('Trust Score: ${profile['trust_score'] ?? 100}',
+              subtitle: Text('Güven Puanı: ${profile['trust_score'] ?? 100}',
                   style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12)),
               trailing: Icon(Icons.arrow_forward_ios, size: 14, color: Colors.white.withOpacity(0.2)),
               onTap: () => context.push('/user-profile', extra: friendId),
@@ -1339,6 +1594,313 @@ class _SportsInterestsSectionState extends ConsumerState<_SportsInterestsSection
             )
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ── Trust & Badges Tab ─────────────────────────────────────────────
+
+class _TrustBadgesTab extends ConsumerWidget {
+  final String? userId;
+  const _TrustBadgesTab({required this.userId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final trustAsync = ref.watch(trustScoreProvider(userId));
+    final earnedKeys = trustAsync.whenData((d) => d.earnedBadgeKeys).asData?.value ?? const <String>[];
+    return SingleChildScrollView(
+      primary: true,
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _Trust2Card(userId: userId ?? ''),
+          const SizedBox(height: 24),
+          const Text('Rozetler',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
+          const SizedBox(height: 12),
+          _BadgesContent(earnedKeys: earnedKeys),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Interests Tab ──────────────────────────────────────────────────
+
+class _InterestsTab extends ConsumerStatefulWidget {
+  final String? userId;
+  final bool isMe;
+  const _InterestsTab({required this.userId, required this.isMe});
+
+  @override
+  ConsumerState<_InterestsTab> createState() => _InterestsTabState();
+}
+
+class _InterestsTabState extends ConsumerState<_InterestsTab> {
+  final TextEditingController _searchCtrl = TextEditingController();
+  String _searchQuery = '';
+
+  static const Map<String, String> _levelLabels = {
+    'beginner': 'Beginner',
+    'intermediate': 'Intermediate',
+    'advanced': 'Advanced',
+  };
+  static const Map<String, Color> _levelColors = {
+    'beginner': Color(0xFF34D399),
+    'intermediate': Color(0xFF60A5FA),
+    'advanced': Color(0xFFFBBF24),
+  };
+  static const List<String> _suggested = ['Padel', 'Bisiklet', 'Yoga'];
+
+  @override
+  void dispose() { _searchCtrl.dispose(); super.dispose(); }
+
+  Future<void> _addSportByName(String sportName) async {
+    final sb = Supabase.instance.client;
+    final uid = sb.auth.currentUser?.id;
+    if (uid == null) return;
+    try {
+      final res = await sb.from('sports').select('id').ilike('name', sportName).maybeSingle();
+      if (res == null) return;
+      await sb.from('user_sports_preferences').upsert({'user_id': uid, 'sport_id': res['id'], 'skill_level': 'beginner'});
+      ref.invalidate(userSportsPreferencesProvider(uid));
+    } catch (_) {}
+  }
+
+  Future<void> _editSkillLevel(Map<String, dynamic> pref) async {
+    const levels = ['beginner', 'intermediate', 'advanced'];
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1E1E1E),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(pref['sports']?['name'] ?? '', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
+            const SizedBox(height: 16),
+            ...levels.map((lvl) {
+              final isSelected = (pref['skill_level'] as String?) == lvl;
+              final c = _levelColors[lvl] ?? Colors.white54;
+              return InkWell(
+                onTap: () async {
+                  final sb = Supabase.instance.client;
+                  final uid = sb.auth.currentUser?.id;
+                  if (uid != null) {
+                    await sb.from('user_sports_preferences').update({'skill_level': lvl}).eq('user_id', uid).eq('sport_id', pref['sport_id']);
+                    ref.invalidate(userSportsPreferencesProvider(uid));
+                  }
+                  if (ctx.mounted) Navigator.pop(ctx);
+                },
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: isSelected ? c.withOpacity(0.12) : const Color(0xFF2A2A2A),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: isSelected ? c.withOpacity(0.5) : Colors.white12),
+                  ),
+                  child: Row(children: [
+                    Text(_levelLabels[lvl] ?? lvl, style: TextStyle(color: isSelected ? c : Colors.white70, fontWeight: FontWeight.bold)),
+                    if (isSelected) ...[const Spacer(), Icon(Icons.check_circle_rounded, color: c, size: 18)],
+                  ]),
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<Map<String, dynamic>> _searchResults = [];
+  bool _isSearching = false;
+
+  Future<void> _searchSports(String query) async {
+    if (query.trim().isEmpty) {
+      setState(() {
+        _searchResults = [];
+        _isSearching = false;
+      });
+      return;
+    }
+
+    setState(() => _isSearching = true);
+
+    try {
+      final sb = Supabase.instance.client;
+      final response = await sb
+          .from('sports')
+          .select('id, name')
+          .ilike('name', '%$query%')
+          .limit(8);
+      
+      if (mounted) {
+        setState(() {
+          _searchResults = List<Map<String, dynamic>>.from(response);
+          _isSearching = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isSearching = false);
+    }
+  }
+
+
+  @override
+  Widget build(BuildContext context) {
+    final prefsAsync = ref.watch(userSportsPreferencesProvider(widget.userId));
+    return SingleChildScrollView(
+      primary: true,
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('My Interests', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 22)),
+          const SizedBox(height: 14),
+          prefsAsync.when(
+            loading: () => const Center(child: CircularProgressIndicator(color: MatchFitTheme.accentGreen)),
+            error: (_, __) => const SizedBox.shrink(),
+            data: (prefs) {
+              if (prefs.isEmpty) {
+                return Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(color: const Color(0xFF1A1A1A), borderRadius: BorderRadius.circular(16)),
+                  child: Text('Henüz spor branşı eklenmedi.', style: TextStyle(color: Colors.white.withOpacity(0.4))),
+                );
+              }
+              return Column(
+                children: prefs.map((pref) {
+                  final name = pref['sports']?['name'] as String? ?? 'Bilinmiyor';
+                  final level = pref['skill_level'] as String? ?? 'beginner';
+                  final lvlColor = _levelColors[level] ?? Colors.white54;
+                  final lvlLabel = _levelLabels[level] ?? level;
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1A1A1A),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white.withOpacity(0.07)),
+                    ),
+                    child: Row(children: [
+                      Container(
+                        width: 42, height: 42,
+                        decoration: BoxDecoration(color: MatchFitTheme.primaryBlue.withOpacity(0.12), shape: BoxShape.circle),
+                        child: const Icon(Icons.sports, color: MatchFitTheme.primaryBlue, size: 20),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                        Text(lvlLabel, style: TextStyle(color: lvlColor, fontSize: 12, fontWeight: FontWeight.w600)),
+                      ])),
+                      if (widget.isMe)
+                        GestureDetector(
+                          onTap: () => _editSkillLevel(pref),
+                          child: Container(
+                            width: 34, height: 34,
+                            decoration: BoxDecoration(color: Colors.white.withOpacity(0.07), shape: BoxShape.circle),
+                            child: const Icon(Icons.edit_rounded, color: Colors.white54, size: 16),
+                          ),
+                        ),
+                    ]),
+                  );
+                }).toList(),
+              );
+            },
+          ),
+          if (widget.isMe) ...[
+            const SizedBox(height: 24),
+            Text('Suggested for You', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 13, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 10),
+            Wrap(spacing: 8, children: _suggested.map((s) => GestureDetector(
+              onTap: () => _addSportByName(s),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(color: const Color(0xFF1A1A1A), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white12)),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Text(s, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                  const SizedBox(width: 6),
+                  const Icon(Icons.add, color: Colors.white38, size: 16),
+                ]),
+              ),
+            )).toList()),
+            const SizedBox(height: 28),
+            const Text('Add New Interest', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
+            const SizedBox(height: 12),
+            Container(
+              decoration: BoxDecoration(color: const Color(0xFF1A1A1A), borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.white10)),
+              child: TextField(
+                controller: _searchCtrl,
+                onChanged: (v) {
+                  setState(() => _searchQuery = v);
+                  _searchSports(v);
+                },
+                style: const TextStyle(color: Colors.white, fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: 'Search sports...',
+                  hintStyle: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 14),
+                  prefixIcon: Icon(Icons.search, color: Colors.white.withOpacity(0.3), size: 20),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            if (_isSearching)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 20),
+                child: Center(child: CircularProgressIndicator(color: MatchFitTheme.accentGreen, strokeWidth: 2)),
+              )
+            else if (_searchQuery.isNotEmpty && _searchResults.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                child: Center(child: Text('No sports found.', style: TextStyle(color: Colors.white.withOpacity(0.3)))),
+              )
+            else if (_searchResults.isNotEmpty)
+              ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: _searchResults.length,
+                itemBuilder: (context, index) {
+                  final sport = _searchResults[index];
+                  final name = sport['name'] as String;
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1A1A1A),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.white.withOpacity(0.05)),
+                    ),
+                    child: ListTile(
+                      dense: true,
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(color: MatchFitTheme.accentGreen.withOpacity(0.1), shape: BoxShape.circle),
+                        child: const Icon(Icons.sports_rounded, color: MatchFitTheme.accentGreen, size: 16),
+                      ),
+                      title: Text(name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      trailing: const Icon(Icons.add_circle_outline_rounded, color: MatchFitTheme.accentGreen, size: 20),
+                      onTap: () {
+                        _addSportByName(name);
+                        _searchCtrl.clear();
+                        setState(() {
+                          _searchQuery = '';
+                          _searchResults = [];
+                        });
+                      },
+                    ),
+                  );
+                },
+              ),
+
+          ],
+        ],
       ),
     );
   }

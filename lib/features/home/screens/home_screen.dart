@@ -9,6 +9,7 @@ import '../../events/repositories/event_repository.dart';
 import '../../auth/repositories/auth_repository.dart';
 import '../../notifications/repositories/notification_repository.dart';
 import '../repositories/matchmaker_repository.dart';
+import '../../profile/models/trust_system.dart';
 import 'package:matchfit/core/services/location_service.dart';
 import 'package:matchfit/core/l10n/app_localizations.dart';
 import 'package:geocoding/geocoding.dart';
@@ -740,14 +741,21 @@ class HomeScreen extends ConsumerWidget {
           );
         }
 
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            children: users.map((user) {
-              final name = user['full_name'] as String? ?? 'Kullanıcı';
-              final avatar = user['avatar_url'] as String? ?? 'https://i.pravatar.cc/150?u=${user['id']}';
-              final score = user['trust_score']?.toString() ?? '50';
+        return Container(
+          height: 310, // Taşmayı engellemek için yeterli yükseklik
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: users.map((user) {
+                final name = user['full_name'] as String? ?? 'Kullanıcı';
+                // i.pravatar.cc yerine CORS dostu DiceBear kullanımı
+                final avatar = user['avatar_url']?.contains('pravatar.cc') == true
+                    ? 'https://api.dicebear.com/7.x/avataaars/png?seed=${user['id']}'
+                    : (user['avatar_url'] as String? ?? 'https://api.dicebear.com/7.x/avataaars/png?seed=${user['id']}');
+                
+                final score = user['trust_score']?.toString() ?? '50';
               final distanceNum = (user['distance'] as num?)?.toDouble() ?? 0.0;
               final distanceStr = distanceNum > 0 ? '${(distanceNum / 1000).toStringAsFixed(1)} km' : '? km';
               
@@ -761,78 +769,121 @@ class HomeScreen extends ConsumerWidget {
                 padding: const EdgeInsets.only(right: 16),
                 child: SizedBox(
                   width: 200,
-                  child: _buildPersonCard(name, '$distanceStr • $score Güven Puanı', tags.take(2).toList(), avatar)
+                  child: _buildPersonCard(
+                    context,
+                    user['id'],
+                    name,
+                    '$distanceStr',
+                    tags.take(2).toList(),
+                    avatar,
+                    int.tryParse(user['trust_score']?.toString() ?? '') ?? 0,
+                  )
                 )
               );
             }).toList(),
           )
-        );
+        ));
       },
       loading: () => const Padding(padding: EdgeInsets.all(32), child: Center(child: CircularProgressIndicator(color: MatchFitTheme.accentGreen))),
       error: (_, __) => const SizedBox(),
     );
   }
 
-  Widget _buildPersonCard(String name, String subtitle, List<String> tags, String avatarUrl) {
+  Widget _buildPersonCard(BuildContext context, String userId, String name, String subtitle, List<String> tags, String avatarUrl, int trustScore) {
+    final lvlInfo = getTrustLevelInfo(trustScore);
     return Container(
       width: 180,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: const Color(0xFF1E1E1E),
         borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: lvlInfo.color.withOpacity(0.15)),
       ),
       child: Column(
         children: [
-          CircleAvatar(radius: 28, backgroundImage: NetworkImage(avatarUrl)),
-          const SizedBox(height: 12),
-          Text(name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-          const SizedBox(height: 4),
+          Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.center,
+            children: [
+              AvatarWidget(
+                name: name,
+                radius: 28,
+                avatarUrl: avatarUrl.contains('supabase.co') ? avatarUrl : null,
+              ),
+              Positioned(
+                bottom: -4, right: -4,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: lvlInfo.color.withOpacity(0.9),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFF1E1E1E), width: 2),
+                  ),
+                  child: Text(
+                    lvlInfo.label.split(' ').first,
+                    style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 8),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15), maxLines: 1, overflow: TextOverflow.ellipsis),
+          const SizedBox(height: 3),
           Text(subtitle, style: const TextStyle(color: Colors.white54, fontSize: 10)),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: tags.map((t) => Container(
-              margin: const EdgeInsets.symmetric(horizontal: 4),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              margin: const EdgeInsets.symmetric(horizontal: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.05),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: Colors.white.withOpacity(0.1)),
               ),
-              child: Text(t, style: const TextStyle(color: MatchFitTheme.accentGreen, fontSize: 10)),
+              child: Text(t, style: const TextStyle(color: MatchFitTheme.accentGreen, fontSize: 9)),
             )).toList(),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
+          // Trust score mini bar
           Row(
             children: [
+              Icon(Icons.shield_rounded, color: lvlInfo.color, size: 11),
+              const SizedBox(width: 4),
               Expanded(
-                child: ElevatedButton(
-                  onPressed: () {},
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(3),
+                  child: LinearProgressIndicator(
+                    value: trustScore / 100,
+                    backgroundColor: Colors.white10,
+                    valueColor: AlwaysStoppedAnimation<Color>(lvlInfo.color),
+                    minHeight: 4,
                   ),
-                  child: const Text('Takip Et', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                 ),
               ),
-              const SizedBox(width: 8),
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.settings, color: Colors.white54, size: 18),
-                  onPressed: () {},
-                  constraints: const BoxConstraints(),
-                  padding: const EdgeInsets.all(10),
-                )
-              )
-            ]
-          )
-        ]
-      )
+              const SizedBox(width: 4),
+              Text('$trustScore', style: TextStyle(color: lvlInfo.color, fontWeight: FontWeight.bold, fontSize: 10)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () => context.push('/user-profile', extra: userId),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: MatchFitTheme.accentGreen,
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                elevation: 0,
+              ),
+              child: const Text('Profili İncele',
+                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 0.5)),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
