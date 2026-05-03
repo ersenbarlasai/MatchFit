@@ -12,6 +12,8 @@ import '../repositories/matchmaker_repository.dart';
 import 'package:matchfit/core/services/location_service.dart';
 import 'package:matchfit/core/l10n/app_localizations.dart';
 import 'package:geocoding/geocoding.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 // ── Providers ──────────────────────────────────────────────────────
 
@@ -28,12 +30,33 @@ final locationNameProvider = FutureProvider.autoDispose<String>((ref) async {
       if (district.isNotEmpty && city.isNotEmpty && district != city) {
         return '$city, $district';
       }
-      return city.isNotEmpty ? city : 'Konum Bulunamadı';
+      return city.isNotEmpty ? city : 'Mevcut Konum';
     }
   } catch (e) {
-    debugPrint('Geocoding error: $e');
+    debugPrint('Geocoding plugin error: $e');
   }
-  return 'Konum Bulunamadı';
+
+  // Fallback to Nominatim API (OpenStreetMap) if native geocoder fails
+  try {
+    final url = Uri.parse('https://nominatim.openstreetmap.org/reverse?format=json&lat=${userLoc.latitude}&lon=${userLoc.longitude}&zoom=10&addressdetails=1');
+    final response = await http.get(url, headers: {'User-Agent': 'MatchFitApp/1.0'});
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      final address = data['address'];
+      if (address != null) {
+        final city = address['province'] ?? address['city'] ?? address['state'] ?? '';
+        final district = address['town'] ?? address['county'] ?? address['district'] ?? address['suburb'] ?? '';
+        if (city.isNotEmpty && district.isNotEmpty && city != district) {
+          return '$city, $district';
+        }
+        if (city.isNotEmpty) return city;
+      }
+    }
+  } catch (e) {
+    debugPrint('Nominatim API error: $e');
+  }
+
+  return 'Mevcut Konum';
 });
 
 final eventsProvider = FutureProvider.autoDispose((ref) async {
@@ -500,11 +523,11 @@ class HomeScreen extends ConsumerWidget {
               );
             }
 
-            // Sort by distance (assuming dist_meters is available) and limit to 5 events
+            // Sort by distance and limit to 5 events
             final sortedEvents = List<Map<String, dynamic>>.from(events);
             sortedEvents.sort((a, b) {
-              final dA = (a['dist_meters'] as num?)?.toDouble() ?? 999999.0;
-              final dB = (b['dist_meters'] as num?)?.toDouble() ?? 999999.0;
+              final dA = (a['distance'] as num?)?.toDouble() ?? 999999.0;
+              final dB = (b['distance'] as num?)?.toDouble() ?? 999999.0;
               return dA.compareTo(dB);
             });
 
@@ -521,7 +544,7 @@ class HomeScreen extends ConsumerWidget {
                 children: sortedEvents.take(5).map((e) {
                   final title = e['title'] as String? ?? 'Etkinlik';
                   final sport = e['sports']?['name'] as String? ?? 'Spor';
-                  final distMeters = (e['dist_meters'] as num?)?.toDouble() ?? 0.0;
+                  final distMeters = (e['distance'] as num?)?.toDouble() ?? 0.0;
                   final distance = distMeters > 0 ? '${(distMeters / 1000).toStringAsFixed(1)} km' : '? km';
                   
                   // handle start_time safely, some might be full ISO strings or just time strings
