@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:matchfit/core/theme.dart';
+import 'package:matchfit/core/l10n/app_localizations.dart';
 import '../repositories/auth_repository.dart';
 
 class ResetPasswordScreen extends ConsumerStatefulWidget {
@@ -16,9 +17,10 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
   bool _isLoading = false;
 
   Future<void> _submit() async {
+    final t = AppLocalizations.of(context);
     if (_emailController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Lütfen e-posta adresinizi girin')),
+        SnackBar(content: Text(t.pleaseEnterEmail)),
       );
       return;
     }
@@ -30,14 +32,14 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Şifre sıfırlama bağlantısı e-posta adresinize gönderildi.')),
+          SnackBar(content: Text(t.resetLinkSent)),
         );
         context.pop();
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Hata: $e')),
+          SnackBar(content: Text('${t.error}: $e')),
         );
       }
     } finally {
@@ -47,6 +49,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
     return Scaffold(
       backgroundColor: const Color(0xFF161616),
       appBar: AppBar(
@@ -127,9 +130,9 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
               const SizedBox(height: 40),
               
               // Title
-              const Text(
-                'Reset Password',
-                style: TextStyle(
+              Text(
+                t.resetPassword,
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 32,
                   fontWeight: FontWeight.w900,
@@ -141,7 +144,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
               
               // Subtitle
               Text(
-                'Enter your email to receive a reset link.',
+                t.resetPasswordSubtitle,
                 style: TextStyle(
                   color: Colors.white.withOpacity(0.6),
                   fontSize: 16,
@@ -190,12 +193,12 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                         width: 20,
                         child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2),
                       )
-                    : const Row(
+                    : Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Text('Send Reset Link', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15, letterSpacing: 0.5)),
-                          SizedBox(width: 8),
-                          Icon(Icons.arrow_forward, size: 20),
+                          Text(t.sendResetLink, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, letterSpacing: 0.5)),
+                          const SizedBox(width: 8),
+                          const Icon(Icons.arrow_forward, size: 20),
                         ],
                       ),
               ),
@@ -210,7 +213,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                     Icon(Icons.arrow_back, color: Colors.white.withOpacity(0.6), size: 16),
                     const SizedBox(width: 8),
                     Text(
-                      'Back to Login',
+                      t.backToLogin,
                       style: TextStyle(
                         color: Colors.white.withOpacity(0.6),
                         fontSize: 15,

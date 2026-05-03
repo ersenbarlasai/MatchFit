@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:matchfit/core/theme.dart';
 import 'package:matchfit/core/widgets/avatar_widget.dart';
 import 'package:matchfit/core/providers/profile_provider.dart';
+import 'package:matchfit/core/l10n/app_localizations.dart';
 import 'dart:ui';
 
 class MainShell extends ConsumerStatefulWidget {
@@ -15,25 +16,34 @@ class MainShell extends ConsumerStatefulWidget {
 }
 
 class _MainShellState extends ConsumerState<MainShell> {
-  int _currentIndex = 0;
+  final _routes = ['/home', '/explore', '/create-event', '/notifications', '/profile'];
 
-  final _routes = ['/home', '/explore', '/home', '/home', '/profile'];
+  int _calculateSelectedIndex(BuildContext context) {
+    final String location = GoRouterState.of(context).uri.path;
+    if (location.startsWith('/explore')) return 1;
+    if (location.startsWith('/create-event')) return 2;
+    if (location.startsWith('/notifications')) return 3;
+    if (location.startsWith('/profile')) return 4;
+    return 0;
+  }
 
   void _onTap(int index, BuildContext context) {
-    setState(() => _currentIndex = index);
     context.go(_routes[index]);
   }
 
   @override
   Widget build(BuildContext context) {
+    final currentIndex = _calculateSelectedIndex(context);
+
     return Scaffold(
       body: widget.child,
       extendBody: true,
-      bottomNavigationBar: _buildBottomNav(context),
+      bottomNavigationBar: _buildBottomNav(context, currentIndex),
     );
   }
 
-  Widget _buildBottomNav(BuildContext context) {
+  Widget _buildBottomNav(BuildContext context, int currentIndex) {
+    final t = AppLocalizations.of(context);
     final profileAsync = ref.watch(currentUserProfileProvider);
 
     return ClipRRect(
@@ -48,27 +58,46 @@ class _MainShellState extends ConsumerState<MainShell> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _NavItem(icon: Icons.home_rounded, label: 'HOME', index: 0, current: _currentIndex, onTap: (i) => _onTap(i, context)),
-              _NavItem(icon: Icons.explore_outlined, label: 'DISCOVER', index: 1, current: _currentIndex, onTap: (i) => _onTap(i, context)),
+              _NavItem(icon: Icons.home_rounded, label: t.navHome, index: 0, current: currentIndex, onTap: (i) => _onTap(i, context)),
+              _NavItem(icon: Icons.explore_outlined, label: t.navDiscover, index: 1, current: currentIndex, onTap: (i) => _onTap(i, context)),
               // Center Create Button
               GestureDetector(
-                onTap: () => context.push('/create-event'),
-                child: Container(
-                  width: 46,
-                  height: 46,
-                  decoration: const BoxDecoration(
-                    color: MatchFitTheme.accentGreen,
-                    shape: BoxShape.circle,
+                onTap: () => _onTap(2, context),
+                behavior: HitTestBehavior.opaque,
+                child: SizedBox(
+                  width: 64,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 46,
+                        height: 46,
+                        decoration: BoxDecoration(
+                          color: currentIndex == 2 ? MatchFitTheme.accentGreen : Colors.white12,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(Icons.add, color: currentIndex == 2 ? Colors.black : Colors.white, size: 26),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        t.navCreate,
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                          color: currentIndex == 2 ? MatchFitTheme.accentGreen : Colors.white30,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ],
                   ),
-                  child: const Icon(Icons.add, color: Colors.black, size: 26),
                 ),
               ),
-              _NavItem(icon: Icons.chat_bubble_outline_rounded, label: 'CHAT', index: 3, current: _currentIndex, onTap: (i) => _onTap(i, context)),
+              _NavItem(icon: Icons.chat_bubble_outline_rounded, label: t.navMessages, index: 3, current: currentIndex, onTap: (i) => _onTap(i, context)),
               
               // Profile Tab with Avatar
               _ProfileNavItem(
                 index: 4,
-                current: _currentIndex,
+                current: currentIndex,
                 onTap: (i) => _onTap(i, context),
                 profileAsync: profileAsync,
               ),
@@ -148,7 +177,7 @@ class _ProfileNavItem extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              'PROFILE',
+              AppLocalizations.of(context).navProfile,
               style: TextStyle(
                 fontSize: 9,
                 fontWeight: FontWeight.bold,

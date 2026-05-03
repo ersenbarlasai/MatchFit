@@ -7,6 +7,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:math' as math;
 import '../../auth/repositories/auth_repository.dart';
 import '../repositories/social_repository.dart';
+import 'package:matchfit/core/providers/profile_provider.dart';
+import 'package:matchfit/core/l10n/app_localizations.dart';
 
 // ── Providers ──────────────────────────────────────────────────────
 
@@ -167,7 +169,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E1E),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Oturumu Kapat', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: Text(AppLocalizations.of(context).logOut, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         content: Text(
           'Hesabınızdan çıkış yapmak istediğinize emin misiniz?',
           style: TextStyle(color: Colors.white.withOpacity(0.7), height: 1.5),
@@ -175,7 +177,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Vazgeç', style: TextStyle(color: Colors.white.withOpacity(0.5))),
+            child: Text(AppLocalizations.of(context).cancel, style: TextStyle(color: Colors.white.withOpacity(0.5))),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -184,7 +186,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            child: const Text('Çıkış Yap', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text(AppLocalizations.of(context).logOut, style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -207,7 +209,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E1E),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Block User', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: Text(AppLocalizations.of(context).block, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         content: Text(
           'Are you sure you want to block $name?\n\nThey will no longer be able to view your profile or events.',
           style: TextStyle(color: Colors.white.withOpacity(0.7), height: 1.5),
@@ -215,7 +217,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel', style: TextStyle(color: Colors.white.withOpacity(0.5))),
+            child: Text(AppLocalizations.of(context).cancel, style: TextStyle(color: Colors.white.withOpacity(0.5))),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -224,7 +226,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            child: const Text('Block', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text(AppLocalizations.of(context).block, style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -233,10 +235,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
 
   Widget _buildBody(Map<String, dynamic> data, String? relationshipStatus) {
     final name = data['full_name'] as String;
-    final trustScore = data['trust_score'] as int;
-    final joined = data['events_joined'] as int;
-    final hosted = data['events_hosted'] as int;
-    final completion = data['completion_pct'] as int;
+    final trustScore = int.tryParse(data['trust_score']?.toString() ?? '') ?? 100;
+    final joined = int.tryParse(data['events_joined']?.toString() ?? '') ?? 0;
+    final hosted = int.tryParse(data['events_hosted']?.toString() ?? '') ?? 0;
+    final completion = int.tryParse(data['completion_pct']?.toString() ?? '') ?? 0;
     final userId = data['user_id'] as String? ?? '';
     final isMe = widget.userId == null || widget.userId == ref.read(authRepositoryProvider).currentUser?.id;
 
@@ -263,7 +265,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               }
             },
           ),
-          title: Text(isMe ? 'Profilim' : 'Oyuncu Profili',
+          title: Text(isMe ? AppLocalizations.of(context).profile : 'Oyuncu Profili',
               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
           actions: [
             if (isMe)
@@ -280,23 +282,23 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   }
                 },
                 itemBuilder: (context) => [
-                  const PopupMenuItem(
+                  PopupMenuItem(
                     value: 'settings',
                     child: Row(
                       children: [
-                        Icon(Icons.shield_outlined, color: Colors.white70, size: 18),
-                        SizedBox(width: 12),
-                        Text('Gizlilik Ayarları', style: TextStyle(color: Colors.white70)),
+                        const Icon(Icons.shield_outlined, color: Colors.white70, size: 18),
+                        const SizedBox(width: 12),
+                        Text(AppLocalizations.of(context).privacySettings, style: const TextStyle(color: Colors.white70)),
                       ],
                     ),
                   ),
-                  const PopupMenuItem(
+                  PopupMenuItem(
                     value: 'logout',
                     child: Row(
                       children: [
-                        Icon(Icons.logout_rounded, color: Color(0xFFFF4B4B), size: 18),
-                        SizedBox(width: 12),
-                        Text('Çıkış Yap', style: TextStyle(color: Color(0xFFFF4B4B), fontWeight: FontWeight.bold)),
+                        const Icon(Icons.logout_rounded, color: Color(0xFFFF4B4B), size: 18),
+                        const SizedBox(width: 12),
+                        Text(AppLocalizations.of(context).logOut, style: const TextStyle(color: Color(0xFFFF4B4B), fontWeight: FontWeight.bold)),
                       ],
                     ),
                   ),
@@ -346,7 +348,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                             children: [
                               Icon(Icons.lock_open_outlined, color: Colors.white70, size: 18),
                               const SizedBox(width: 12),
-                              const Text('Unblock User', style: TextStyle(color: Colors.white70)),
+                              const Text('Engeli Kaldır', style: TextStyle(color: Colors.white70)),
                             ],
                           ),
                         )
@@ -357,7 +359,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                             children: [
                               const Icon(Icons.block_outlined, color: Colors.redAccent, size: 18),
                               const SizedBox(width: 12),
-                              const Text('Block User', style: TextStyle(color: Colors.redAccent)),
+                              Text(AppLocalizations.of(context).block, style: const TextStyle(color: Colors.redAccent)),
                             ],
                           ),
                         ),
@@ -379,7 +381,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 avatarUrl: avatarUrl.isNotEmpty ? avatarUrl : null,
                 editable: isMe,
                 userId: userId,
-                onUploaded: (url) => setState(() => _avatarUrl = url),
+                onUploaded: (url) {
+                  setState(() => _avatarUrl = url);
+                  ref.invalidate(currentUserProfileProvider);
+                  ref.invalidate(profileDataProvider(userId));
+                },
               ),
               const SizedBox(height: 14),
               // Name
@@ -442,7 +448,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                 elevation: 0,
                               ),
-                              child: const Text('Onayla', style: TextStyle(fontWeight: FontWeight.bold)),
+                              child: Text(AppLocalizations.of(context).accept, style: const TextStyle(fontWeight: FontWeight.bold)),
                             ),
                           ),
                           const SizedBox(width: 10),
@@ -458,7 +464,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                 padding: const EdgeInsets.symmetric(vertical: 10),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                               ),
-                              child: const Text('Reddet', style: TextStyle(fontWeight: FontWeight.bold)),
+                              child: Text(AppLocalizations.of(context).reject, style: const TextStyle(fontWeight: FontWeight.bold)),
                             ),
                           ),
                         ],
@@ -506,10 +512,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                         ),
                         child: Text(
                             isMe
-                                ? 'Profili Düzenle'
+                                ? AppLocalizations.of(context).editProfile
                                 : (relationshipStatus == 'following'
                                     ? 'Takip Ediliyor ✓'
-                                    : (relationshipStatus == 'pending' ? 'Beklemede…' : 'Takip Et')),
+                                    : (relationshipStatus == 'pending' ? AppLocalizations.of(context).followRequested : AppLocalizations.of(context).follow)),
                             style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
                       ),
                     ),
@@ -624,11 +630,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 indicatorWeight: 2.5,
                 indicatorSize: TabBarIndicatorSize.label,
                 labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                tabs: const [
-                  Tab(text: 'Paylaşımlar'),
-                  Tab(text: 'Geçmiş'),
-                  Tab(text: 'Rozetler'),
-                  Tab(text: 'Arkadaşlar'),
+                tabs: [
+                  const Tab(text: 'Paylaşımlar'),
+                  Tab(text: AppLocalizations.of(context).pastEvents),
+                  const Tab(text: 'Rozetler'),
+                  Tab(text: AppLocalizations.of(context).followers),
                 ],
               ),
               const Divider(height: 1, color: Colors.white10),
@@ -674,7 +680,7 @@ class _TrustScoreCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Güven Puanı',
+                    Text(AppLocalizations.of(context).trustScore,
                         style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
                     Text('Topluluk saygınlığı ve güvenilirlik.',
                         style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11)),

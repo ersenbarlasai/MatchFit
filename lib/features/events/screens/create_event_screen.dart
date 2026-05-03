@@ -9,6 +9,9 @@ import '../../referee/repositories/referee_repository.dart';
 import 'package:matchfit/core/services/location_search_service.dart';
 import 'package:matchfit/core/constants/location_data.dart';
 import 'package:matchfit/core/constants/sports_data.dart';
+import 'package:matchfit/core/widgets/avatar_widget.dart';
+import 'package:matchfit/core/providers/profile_provider.dart';
+import 'package:matchfit/core/l10n/app_localizations.dart';
 import 'dart:async';
 
 class CreateEventScreen extends ConsumerStatefulWidget {
@@ -19,6 +22,8 @@ class CreateEventScreen extends ConsumerStatefulWidget {
 }
 
 class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
+  AppLocalizations get t => AppLocalizations.of(context);
+
   int _currentStep = 1;
   final _titleController = TextEditingController();
   final _venueController = TextEditingController();
@@ -60,13 +65,13 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   void _nextStep() {
     if (_currentStep == 1) {
       if (selectedCategory == null || selectedSport == null) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Lütfen kategori ve alt branş seçin')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context).pleaseSelectCategoryAndSport)));
         return;
       }
       setState(() => _currentStep = 2);
     } else if (_currentStep == 2) {
       if (selectedDate == null || selectedTime == null || _titleController.text.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Lütfen tarih, saat ve başlık girin')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context).pleaseEnterDateTimeTitle)));
         return;
       }
       setState(() => _currentStep = 3);
@@ -75,7 +80,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
 
   Future<void> _publishEvent() async {
     if (selectedProvince == null || selectedDistrict == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Lütfen konum bilgilerini tamamlayın')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context).pleaseCompleteLocation)));
       return;
     }
 
@@ -88,7 +93,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
       final refereeRepo = ref.read(refereeRepositoryProvider);
       final isRestricted = await refereeRepo.isUserRestricted(currentUser.id);
       if (isRestricted) {
-        throw Exception('Hakem Temsilcisi: Ceza aldığınız için şu an etkinlik oluşturamazsınız.');
+        throw Exception(AppLocalizations.of(context).refereeRestriction);
       }
 
       final sportResponse = await Supabase.instance.client
@@ -129,14 +134,14 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Etkinlik başarıyla yayınlandı!')),
+          SnackBar(content: Text(AppLocalizations.of(context).eventPublished)),
         );
         context.pop();
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Hata: $e')),
+          SnackBar(content: Text('${AppLocalizations.of(context).error}: $e')),
         );
       }
     } finally {
@@ -146,6 +151,9 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final profileAsync = ref.watch(currentUserProfileProvider);
+    final t = AppLocalizations.of(context);
+
     return Scaffold(
       backgroundColor: const Color(0xFF0A0A0A),
       appBar: AppBar(
@@ -157,7 +165,11 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
             if (_currentStep > 1) {
               setState(() => _currentStep--);
             } else {
-              context.pop();
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/home');
+              }
             }
           },
         ),
@@ -175,9 +187,15 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
             const Spacer(),
             const Icon(Icons.notifications_none, color: Colors.white),
             const SizedBox(width: 16),
-            CircleAvatar(
-              radius: 16,
-              backgroundImage: NetworkImage(ref.read(authRepositoryProvider).currentUser?.userMetadata?['avatar_url'] ?? 'https://i.pravatar.cc/150?u=me'),
+            profileAsync.when(
+              data: (p) => AvatarWidget(
+                name: p?['full_name'] ?? 'U',
+                avatarUrl: p?['avatar_url'],
+                radius: 16,
+                editable: false,
+              ),
+              loading: () => const CircleAvatar(radius: 16, backgroundColor: Color(0xFF1E1E1E)),
+              error: (_, __) => const CircleAvatar(radius: 16, backgroundColor: Color(0xFF1E1E1E)),
             ),
           ],
         ),
@@ -205,12 +223,11 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
               if (_currentStep == 2) _buildStep2(),
               if (_currentStep == 3) _buildStep3(),
               
-              const SizedBox(height: 40),
+              const SizedBox(height: 120),
             ],
           ),
         ),
       ),
-      bottomNavigationBar: _buildBottomNav(),
     );
   }
 
@@ -240,10 +257,10 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
         ),
         const SizedBox(height: 32),
         
-        _buildLabel('Kategori Seç'),
+        _buildLabel(t.selectCategory),
         _buildCustomDropdown(
           value: selectedCategory,
-          hint: 'Kategori Seç',
+          hint: t.selectCategory,
           items: sportsData.map((c) => c.name).toList(),
           onChanged: (val) => setState(() {
             selectedCategory = val;
@@ -252,10 +269,10 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
         ),
         const SizedBox(height: 24),
         
-        _buildLabel('Alt Branş Seç'),
+        _buildLabel(t.selectSubBranch),
         _buildCustomDropdown(
           value: selectedSport,
-          hint: 'Alt Branş Seç',
+          hint: t.selectSubBranch,
           items: selectedCategory != null 
             ? sportsData.firstWhere((c) => c.name == selectedCategory).subcategories 
             : [],
@@ -263,9 +280,9 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
         ),
         const SizedBox(height: 24),
         
-        _buildLabel('Seviye'),
+        _buildLabel(t.level),
         _buildSegmentedControl(
-          options: ['Başlangıç', 'Orta', 'İleri'],
+          options: [t.beginner, t.intermediate, t.advanced],
           current: requiredLevel,
           onSelect: (val) => setState(() => requiredLevel = val),
         ),
@@ -286,7 +303,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Açık / Kapalı', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                  Text(t.openClosed, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                   Switch(
                     value: isIndoor,
                     onChanged: (val) => setState(() => isIndoor = val),
@@ -309,7 +326,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('KATILIMCI SAYISI', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
+              Text(t.participantCount, style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
               const SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -354,10 +371,10 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
         ),
         const SizedBox(height: 32),
         
-        _buildLabel('Başlık'),
+        _buildLabel(t.title),
         _buildCustomTextField(
           controller: _titleController,
-          hint: 'Etkinlik başlığı (örn: Sabah Tenisi)',
+          hint: t.eventTitleHint,
         ),
         const SizedBox(height: 24),
         
@@ -367,9 +384,9 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildLabel('Tarih'),
+                  _buildLabel(t.date),
                   _buildPickerTile(
-                    label: selectedDate == null ? 'Seç' : '${selectedDate!.day}/${selectedDate!.month}',
+                    label: selectedDate == null ? t.select : '${selectedDate!.day}/${selectedDate!.month}',
                     icon: Icons.calendar_today,
                     onTap: () async {
                       final date = await showDatePicker(
@@ -389,9 +406,9 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildLabel('Saat'),
+                  _buildLabel(t.time),
                   _buildPickerTile(
-                    label: selectedTime == null ? 'Seç' : selectedTime!.format(context),
+                    label: selectedTime == null ? t.select : selectedTime!.format(context),
                     icon: Icons.access_time,
                     onTap: () async {
                       final time = await showTimePicker(
@@ -408,10 +425,10 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
         ),
         const SizedBox(height: 24),
         
-        _buildLabel('Açıklama (Opsiyonel)'),
+        _buildLabel(t.descriptionOptional),
         _buildCustomTextField(
           controller: _descriptionController,
-          hint: 'Etkinlik hakkında detaylar...',
+          hint: t.descriptionHint,
           maxLines: 4,
         ),
         const SizedBox(height: 32),
@@ -436,7 +453,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
         ),
         const SizedBox(height: 32),
         
-        _buildLabel('Ülke'),
+        _buildLabel(t.country),
         _buildCustomDropdown(
           value: selectedCountry,
           items: countries,
@@ -448,10 +465,10 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
         ),
         const SizedBox(height: 20),
         
-        _buildLabel('Şehir (İl)'),
+        _buildLabel(t.province),
         _buildCustomDropdown(
           value: selectedProvince,
-          hint: 'Şehir Seç',
+          hint: t.selectProvince,
           items: turkeyProvinces.keys.toList(),
           onChanged: (val) => setState(() {
             selectedProvince = val;
@@ -460,19 +477,19 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
         ),
         const SizedBox(height: 20),
         
-        _buildLabel('İlçe'),
+        _buildLabel(t.district),
         _buildCustomDropdown(
           value: selectedDistrict,
-          hint: 'İlçe Seç',
+          hint: t.selectDistrict,
           items: selectedProvince != null ? turkeyProvinces[selectedProvince]! : [],
           onChanged: (val) => setState(() => selectedDistrict = val),
         ),
         const SizedBox(height: 24),
         
-        _buildLabel('Mekan Arama / Sokak'),
+        _buildLabel(t.venueSearch),
         _buildCustomTextField(
           controller: _venueController,
-          hint: 'Park, saha, salon adı...',
+          hint: t.venueSearchHint,
           onChanged: _onLocationChanged,
           prefixIcon: Icons.place_outlined,
         ),
@@ -522,12 +539,12 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
             ),
             child: _isLoading 
               ? const CircularProgressIndicator(color: Colors.black)
-              : const Row(
+              : Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text('ETKİNLİĞİ YAYINLA', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
-                    SizedBox(width: 8),
-                    Icon(Icons.check_circle_outline),
+                    Text(t.publishEvent, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                    const SizedBox(width: 8),
+                    const Icon(Icons.check_circle_outline),
                   ],
                 ),
           ),
@@ -634,12 +651,12 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
           elevation: 8,
           shadowColor: MatchFitTheme.accentGreen.withOpacity(0.4),
         ),
-        child: const Row(
+        child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text('SONRAKİ ADIM', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
-            SizedBox(width: 8),
-            Icon(Icons.arrow_forward),
+            Text(t.nextStep, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+            const SizedBox(width: 8),
+            const Icon(Icons.arrow_forward),
           ],
         ),
       ),
@@ -716,31 +733,6 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
             Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildBottomNav() {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.black,
-        border: Border(top: BorderSide(color: Colors.white10)),
-      ),
-      child: BottomNavigationBar(
-        backgroundColor: Colors.transparent,
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: MatchFitTheme.accentGreen,
-        unselectedItemColor: Colors.white54,
-        showSelectedLabels: true,
-        showUnselectedLabels: true,
-        currentIndex: 2, // Always highlight Create
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home_outlined), label: 'ANA SAYFA'),
-          BottomNavigationBarItem(icon: Icon(Icons.explore_outlined), label: 'KEŞFET'),
-          BottomNavigationBarItem(icon: Icon(Icons.add_circle, size: 40), label: 'OLUŞTUR'),
-          BottomNavigationBarItem(icon: Icon(Icons.chat_bubble_outline), label: 'MESAJLAR'),
-          BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: 'PROFİL'),
-        ],
       ),
     );
   }

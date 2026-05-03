@@ -100,7 +100,7 @@ class _ShareEventPostScreenState extends ConsumerState<ShareEventPostScreen> {
               ),
               child: _isPosting
                   ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-                  : const Text('Publish', style: TextStyle(fontWeight: FontWeight.bold)),
+                  : const Text('Yayınla', style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ),
         ],

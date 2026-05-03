@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:matchfit/core/theme.dart';
+import 'package:matchfit/core/l10n/app_localizations.dart';
 import '../repositories/auth_repository.dart';
 
 class SignupScreen extends ConsumerStatefulWidget {
@@ -23,23 +24,24 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   bool _obscureConfirmPassword = true;
 
   Future<void> _submit() async {
+    final t = AppLocalizations.of(context);
     if (!_agreeToTerms) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Kayıt olmak için şartları kabul etmelisiniz.')),
+        SnackBar(content: Text(t.mustAgreeTerms)),
       );
       return;
     }
     
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty || _nameController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Lütfen tüm alanları doldurun')),
+        SnackBar(content: Text(t.pleaseFillAllFields)),
       );
       return;
     }
 
     if (_passwordController.text != _confirmPasswordController.text) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Şifreler eşleşmiyor')),
+        SnackBar(content: Text(t.passwordsDontMatch)),
       );
       return;
     }
@@ -66,7 +68,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Kayıt Hatası: $e')),
+          SnackBar(content: Text('${t.signUpError}: $e')),
         );
       }
     } finally {
@@ -76,6 +78,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
     return Scaffold(
       backgroundColor: const Color(0xFF161616),
       appBar: AppBar(
@@ -103,9 +106,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 24),
-              const Text(
-                'Join the\nCommunity',
-                style: TextStyle(
+              Text(
+                t.joinCommunity,
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 36,
                   fontWeight: FontWeight.w900,
@@ -116,7 +119,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               ),
               const SizedBox(height: 12),
               Text(
-                'Move Together. Play Harder.',
+                t.signUpSubtitle,
                 style: TextStyle(
                   color: Colors.white.withOpacity(0.6),
                   fontSize: 16,
@@ -129,7 +132,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               // Full Name Field
               _buildTextField(
                 controller: _nameController,
-                label: 'Full Name',
+                label: t.fullName,
                 icon: Icons.person_outline,
               ),
               const SizedBox(height: 16),
@@ -137,7 +140,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               // Email Field
               _buildTextField(
                 controller: _emailController,
-                label: 'Email Address',
+                label: t.emailAddress,
                 icon: Icons.mail_outline,
                 keyboardType: TextInputType.emailAddress,
               ),
@@ -146,7 +149,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               // Password Field
               _buildTextField(
                 controller: _passwordController,
-                label: 'Password',
+                label: t.password,
                 icon: _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
                 obscureText: _obscurePassword,
                 onIconTap: () {
@@ -158,7 +161,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               // Confirm Password Field
               _buildTextField(
                 controller: _confirmPasswordController,
-                label: 'Confirm Password',
+                label: t.confirmPassword,
                 icon: _obscureConfirmPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
                 obscureText: _obscureConfirmPassword,
                 onIconTap: () {
@@ -195,16 +198,16 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                     child: RichText(
                       text: TextSpan(
                         style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 13, height: 1.4),
-                        children: const [
-                          TextSpan(text: 'I agree to the '),
+                        children: [
+                          TextSpan(text: t.agreeToTerms),
                           TextSpan(
-                            text: 'Terms & Conditions',
-                            style: TextStyle(color: Colors.white, decoration: TextDecoration.underline),
+                            text: t.termsAndConditions,
+                            style: const TextStyle(color: Colors.white, decoration: TextDecoration.underline),
                           ),
-                          TextSpan(text: ' and '),
+                          TextSpan(text: t.and),
                           TextSpan(
-                            text: 'Privacy Policy.',
-                            style: TextStyle(color: Colors.white, decoration: TextDecoration.underline),
+                            text: t.privacyPolicy,
+                            style: const TextStyle(color: Colors.white, decoration: TextDecoration.underline),
                           ),
                         ],
                       ),
@@ -232,12 +235,12 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                         width: 20,
                         child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2),
                       )
-                    : const Row(
+                    : Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Text('CREATE ACCOUNT', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15, letterSpacing: 0.5)),
-                          SizedBox(width: 8),
-                          Icon(Icons.arrow_forward, size: 20),
+                          Text(t.createAccount, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, letterSpacing: 0.5)),
+                          const SizedBox(width: 8),
+                          const Icon(Icons.arrow_forward, size: 20),
                         ],
                       ),
               ),
@@ -250,7 +253,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Text(
-                      'OR CONTINUE WITH',
+                      t.orContinueWith.toUpperCase(),
                       style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1),
                     ),
                   ),
@@ -298,14 +301,14 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    'Already have an account? ',
+                    t.alreadyHaveAccount,
                     style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 15),
                   ),
                   GestureDetector(
                     onTap: () => context.pop(),
-                    child: const Text(
-                      'Log In',
-                      style: TextStyle(color: MatchFitTheme.accentGreen, fontWeight: FontWeight.bold, fontSize: 15),
+                    child: Text(
+                      t.logIn,
+                      style: const TextStyle(color: MatchFitTheme.accentGreen, fontWeight: FontWeight.bold, fontSize: 15),
                     ),
                   ),
                 ],

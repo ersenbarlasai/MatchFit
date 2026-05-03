@@ -36,12 +36,13 @@ final GoRouter appRouter = GoRouter(
       routes: [
         GoRoute(path: '/home', builder: (context, state) => const HomeScreen()),
         GoRoute(path: '/explore', builder: (context, state) => const ExploreScreen()),
+        GoRoute(path: '/create-event', builder: (context, state) => const CreateEventScreen()),
+        GoRoute(path: '/notifications', builder: (context, state) => const NotificationScreen()),
         GoRoute(path: '/profile', builder: (context, state) => const ProfileScreen()),
       ],
     ),
 
     // ── Standalone routes (no shell) ──
-    GoRoute(path: '/create-event', builder: (context, state) => const CreateEventScreen()),
     GoRoute(
       path: '/event-detail',
       builder: (context, state) {
@@ -64,7 +65,6 @@ final GoRouter appRouter = GoRouter(
         return EditEventScreen(event: event);
       },
     ),
-    GoRoute(path: '/notifications', builder: (context, state) => const NotificationScreen()),
     GoRoute(
       path: '/user-profile',
       builder: (context, state) {

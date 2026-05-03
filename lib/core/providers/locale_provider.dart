@@ -1,37 +1,28 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-enum AppLocale { tr, en }
+/// Locale Provider — Uygulama genelinde aktif dili yönetir.
+/// Varsayılan: Türkçe (tr)
+/// 
+/// Kullanım:
+///   final locale = ref.watch(localeProvider);       // Dinle
+///   ref.read(localeProvider.notifier).setLocale('en'); // Değiştir
 
-final localeProvider = StateProvider<AppLocale>((ref) => AppLocale.tr);
+class LocaleNotifier extends Notifier<Locale> {
+  @override
+  Locale build() {
+    return const Locale('tr');
+  }
 
-class LocaleService {
-  static String tr(String key, {AppLocale locale = AppLocale.tr}) {
-    // Simple dictionary for now
-    final Map<AppLocale, Map<String, String>> localizedValues = {
-      AppLocale.tr: {
-        'create_event': 'Etkinlik Oluştur',
-        'next_step': 'SONRAKİ ADIM',
-        'publish_event': 'ETKİNLİĞİ YAYINLA',
-        'beginner': 'Başlangıç',
-        'intermediate': 'Orta',
-        'advanced': 'İleri',
-        'venue': 'Mekan',
-        'indoor': 'Kapalı',
-        'outdoor': 'Açık',
-        // Add more as needed
-      },
-      AppLocale.en: {
-        'create_event': 'Create Event',
-        'next_step': 'NEXT STEP',
-        'publish_event': 'PUBLISH EVENT',
-        'beginner': 'Beginner',
-        'intermediate': 'Intermediate',
-        'advanced': 'Advanced',
-        'venue': 'Venue',
-        'indoor': 'Indoor',
-        'outdoor': 'Outdoor',
-      }
-    };
-    return localizedValues[locale]?[key] ?? key;
+  void setLocale(String languageCode) {
+    if (['tr', 'en'].contains(languageCode)) {
+      state = Locale(languageCode);
+    }
+  }
+
+  void toggleLocale() {
+    state = state.languageCode == 'tr' ? const Locale('en') : const Locale('tr');
   }
 }
+
+final localeProvider = NotifierProvider<LocaleNotifier, Locale>(LocaleNotifier.new);

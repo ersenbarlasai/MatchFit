@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:matchfit/core/theme.dart';
+import 'package:matchfit/core/l10n/app_localizations.dart';
 import '../repositories/auth_repository.dart';
 
 class UpdatePasswordScreen extends ConsumerStatefulWidget {
@@ -19,26 +20,27 @@ class _UpdatePasswordScreenState extends ConsumerState<UpdatePasswordScreen> {
   bool _obscureConfirm = true;
 
   Future<void> _submit() async {
+    final t = AppLocalizations.of(context);
     final password = _passwordController.text.trim();
     final confirm = _confirmController.text.trim();
 
     if (password.isEmpty || confirm.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Lütfen her iki alanı da doldurun')),
+        SnackBar(content: Text(t.pleaseFillBothFields)),
       );
       return;
     }
 
     if (password != confirm) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Şifreler eşleşmiyor')),
+        SnackBar(content: Text(t.passwordsDontMatch)),
       );
       return;
     }
 
     if (password.length < 8) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Şifre en az 8 karakter olmalıdır')),
+        SnackBar(content: Text(t.passwordMinLength)),
       );
       return;
     }
@@ -50,14 +52,14 @@ class _UpdatePasswordScreenState extends ConsumerState<UpdatePasswordScreen> {
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Şifreniz başarıyla güncellendi. Lütfen giriş yapın.')),
+          SnackBar(content: Text(t.passwordUpdated)),
         );
         context.go('/login');
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Hata: $e')),
+          SnackBar(content: Text('${t.error}: $e')),
         );
       }
     } finally {
@@ -67,6 +69,7 @@ class _UpdatePasswordScreenState extends ConsumerState<UpdatePasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
     return Scaffold(
       backgroundColor: const Color(0xFF161616),
       appBar: AppBar(
@@ -86,9 +89,9 @@ class _UpdatePasswordScreenState extends ConsumerState<UpdatePasswordScreen> {
               const SizedBox(height: 20),
               
               // Title
-              const Text(
-                'Create New Password',
-                style: TextStyle(
+              Text(
+                t.createNewPassword,
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 32,
                   fontWeight: FontWeight.w900,
@@ -99,7 +102,7 @@ class _UpdatePasswordScreenState extends ConsumerState<UpdatePasswordScreen> {
               
               // Subtitle
               Text(
-                'Set a strong password to protect your account.',
+                t.updatePasswordSubtitle,
                 style: TextStyle(
                   color: Colors.white.withOpacity(0.8),
                   fontSize: 16,
@@ -111,7 +114,7 @@ class _UpdatePasswordScreenState extends ConsumerState<UpdatePasswordScreen> {
               // New Password Field
               _buildTextField(
                 controller: _passwordController,
-                hintText: 'New Password',
+                hintText: t.newPassword,
                 obscureText: _obscurePassword,
                 onSuffixTap: () {
                   setState(() => _obscurePassword = !_obscurePassword);
@@ -123,7 +126,7 @@ class _UpdatePasswordScreenState extends ConsumerState<UpdatePasswordScreen> {
               // Confirm Password Field
               _buildTextField(
                 controller: _confirmController,
-                hintText: 'Confirm New Password',
+                hintText: t.confirmNewPassword,
                 obscureText: _obscureConfirm,
                 onSuffixTap: () {
                   setState(() => _obscureConfirm = !_obscureConfirm);
@@ -149,13 +152,13 @@ class _UpdatePasswordScreenState extends ConsumerState<UpdatePasswordScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'Security Tip',
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                          Text(
+                            t.securityTip,
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Use at least 8 characters with a mix of letters and numbers.',
+                            t.securityTipDesc,
                             style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 13, height: 1.4),
                           ),
                         ],
@@ -185,12 +188,12 @@ class _UpdatePasswordScreenState extends ConsumerState<UpdatePasswordScreen> {
                         width: 20,
                         child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2),
                       )
-                    : const Row(
+                    : Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Text('Update Password', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15, letterSpacing: 0.5)),
-                          SizedBox(width: 8),
-                          Icon(Icons.arrow_forward, size: 20),
+                          Text(t.updatePassword, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, letterSpacing: 0.5)),
+                          const SizedBox(width: 8),
+                          const Icon(Icons.arrow_forward, size: 20),
                         ],
                       ),
               ),

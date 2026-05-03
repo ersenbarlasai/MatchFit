@@ -13,6 +13,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:matchfit/core/services/location_service.dart';
 import 'package:matchfit/core/constants/sports_data.dart';
 import '../../events/repositories/event_repository.dart';
+import 'package:matchfit/core/l10n/app_localizations.dart';
 
 // ── Providers ─────────────────────────────────────────────────────
 
@@ -330,7 +331,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                 loading: () => const Center(
                     child: CircularProgressIndicator(color: MatchFitTheme.accentGreen)),
                 error: (e, _) => Center(
-                    child: Text('Hata: $e', style: const TextStyle(color: Colors.white54))),
+                    child: Text('${AppLocalizations.of(context).error}: $e', style: const TextStyle(color: Colors.white54))),
                 data: (events) {
                   final selectedSport = ref.watch(exploreSportProvider);
                   final filtered = events.where((e) {
@@ -346,7 +347,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                         children: [
                           Icon(Icons.search_off, color: Colors.white.withOpacity(0.2), size: 48),
                           const SizedBox(height: 12),
-                          Text('Yakınlarda maç bulunamadı',
+                          Text(AppLocalizations.of(context).noResults,
                               style: TextStyle(color: Colors.white.withOpacity(0.3))),
                         ],
                       ),
@@ -836,7 +837,7 @@ class _NearbyEventCard extends StatelessWidget {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   elevation: 0,
                 ),
-                child: const Text('DETAY', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                child: Text(AppLocalizations.of(context).details.toUpperCase(), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
               ),
             ],
           ),

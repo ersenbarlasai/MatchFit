@@ -63,7 +63,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         setState(() => _participantStatus = 'pending');
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Join request sent! Waiting for host approval.'),
+            content: Text('Katılım isteği gönderildi! Onay bekleniyor.'),
             backgroundColor: Color(0xFF0052FF),
           ),
         );
@@ -106,10 +106,10 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
               ),
               const SizedBox(width: 16),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text("You're in! 🎉",
+                const Text("Tebrikler! 🎉",
                     style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.white)),
                 const SizedBox(height: 4),
-                Text('Want to share this moment with your followers?',
+                Text('Bu anı arkadaşlarınla paylaşmak ister misin?',
                     style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 13)),
               ])),
             ]),
@@ -123,7 +123,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
-                  child: const Text('Skip', style: TextStyle(color: Colors.white70)),
+                  child: const Text('Geç', style: TextStyle(color: Colors.white70)),
                 ),
               ),
               const SizedBox(width: 12),
@@ -141,7 +141,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
                   icon: const Icon(Icons.auto_awesome, size: 18),
-                  label: const Text('Share Moment', style: TextStyle(fontWeight: FontWeight.bold)),
+                  label: const Text('Anı Paylaş', style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ),
             ]),
@@ -172,19 +172,19 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
   }
 
   String _formatDate(String? dateStr, String? timeStr) {
-    if (dateStr == null || dateStr.isEmpty) return 'TBD';
+    if (dateStr == null || dateStr.isEmpty) return 'Belli Değil';
     try {
       final dt = DateTime.parse(dateStr);
-      const months = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-          'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const months = ['', 'Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz',
+          'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
       
-      String displayTime = '00:00 AM';
+      String displayTime = '00:00';
       if (timeStr != null && timeStr.isNotEmpty) {
         final parts = timeStr.split(':');
         if (parts.length >= 2) {
           final h = int.parse(parts[0]);
           final m = int.parse(parts[1]);
-          displayTime = '${h > 12 ? h - 12 : (h == 0 ? 12 : h)}:${m.toString().padLeft(2, '0')} ${h >= 12 ? 'PM' : 'AM'}';
+          displayTime = '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
         }
       }
       return '${months[dt.month]} ${dt.day}, $displayTime';
@@ -195,16 +195,16 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final title = widget.event['title'] as String? ?? 'Event';
-    final sport = widget.event['sports']?['name'] as String? ?? 'Sport';
-    final description = widget.event['description'] as String? ?? 'No description available.';
-    final location = widget.event['location_name'] as String? ?? widget.event['location_text'] as String? ?? 'Location TBD';
+    final title = widget.event['title'] as String? ?? 'Etkinlik';
+    final sport = widget.event['sports']?['name'] as String? ?? 'Spor';
+    final description = widget.event['description'] as String? ?? 'Açıklama bulunmuyor.';
+    final location = widget.event['location_name'] as String? ?? widget.event['location_text'] as String? ?? 'Konum Belli Değil';
     final date = _formatDate(widget.event['event_date'] as String?, widget.event['start_time'] as String?);
     final hostProfile = widget.event['profiles'] as Map<String, dynamic>?;
     final hostName = hostProfile?['full_name'] as String? ?? 'Host';
     final hostAvatar = hostProfile?['avatar_url'] as String?;
-    final hostTrust = hostProfile?['trust_score'] as int? ?? 100;
-    final maxP = widget.event['max_participants'] as int? ?? 10;
+    final hostTrust = int.tryParse(hostProfile?['trust_score']?.toString() ?? '') ?? 100;
+    final maxP = int.tryParse(widget.event['max_participants']?.toString() ?? '') ?? 10;
     final skillLevel = widget.event['required_level'] as String? ?? 'Open';
     final eventId = widget.event['id']?.toString() ?? '';
     final hostId = widget.event['host_id'] as String? ?? '';
@@ -231,7 +231,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
             child: const Icon(Icons.arrow_back, color: Colors.white),
           ),
         ),
-        title: const Text('Event Details',
+        title: const Text('Etkinlik Detayları',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         actions: [
           Container(
@@ -280,8 +280,8 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                             Text(date, style: const TextStyle(color: Colors.white70, fontSize: 13)),
                             const SizedBox(width: 16),
                             const Icon(Icons.attach_money, size: 14, color: Colors.white54),
-                            Text('Free', style: const TextStyle(color: Colors.white70, fontSize: 13)),
-                            Text(' / player', style: TextStyle(color: Colors.white.withOpacity(0.35), fontSize: 13)),
+                            const Text('Ücretsiz', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                            Text(' / oyuncu', style: TextStyle(color: Colors.white.withOpacity(0.35), fontSize: 13)),
                           ],
                         ),
 
@@ -289,7 +289,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                         const _Divider(),
 
                         const SizedBox(height: 20),
-                        const Text('About the Event',
+                        const Text('Etkinlik Hakkında',
                             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17)),
                         const SizedBox(height: 10),
                         Text(description,
@@ -302,7 +302,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                         const _Divider(),
 
                         const SizedBox(height: 20),
-                        const Text('Location',
+                        const Text('Konum',
                             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17)),
                         const SizedBox(height: 12),
                         _LocationCard(
@@ -315,7 +315,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                         const _Divider(),
 
                         const SizedBox(height: 20),
-                        const Text('Hosted By',
+                        const Text('Düzenleyen',
                             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17)),
                         const SizedBox(height: 12),
                         _HostCard(
@@ -617,7 +617,7 @@ class _HostCard extends StatelessWidget {
                   children: [
                     const Icon(Icons.shield_outlined, size: 12, color: MatchFitTheme.accentGreen),
                     const SizedBox(width: 4),
-                    Text('$trustScore Trust',
+                    Text('$trustScore Güven Puanı',
                         style: const TextStyle(
                             color: MatchFitTheme.accentGreen, fontWeight: FontWeight.bold, fontSize: 11)),
                   ],
@@ -626,7 +626,7 @@ class _HostCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          Text('Verified event organizer with high trust rating.',
+          Text('Yüksek güven puanına sahip onaylı organizatör.',
               style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 13, height: 1.5)),
         ],
       ),
@@ -648,10 +648,10 @@ class _JoinRequestsSection extends ConsumerWidget {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Join Requests',
+          const Text('Katılım İstekleri',
               style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17)),
           const SizedBox(height: 14),
-          Text('No pending requests.',
+          Text('Bekleyen istek yok.',
               style: TextStyle(color: Colors.white.withOpacity(0.35), fontSize: 13)),
         ],
       );
@@ -662,7 +662,7 @@ class _JoinRequestsSection extends ConsumerWidget {
       children: [
         Row(
           children: [
-            const Text('Join Requests',
+            const Text('Katılım İstekleri',
                 style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17)),
             const SizedBox(width: 8),
             Container(
@@ -679,7 +679,7 @@ class _JoinRequestsSection extends ConsumerWidget {
         const SizedBox(height: 14),
         ...requests.map((request) {
           final profile = request['profiles'] as Map<String, dynamic>?;
-          final name = profile?['full_name'] as String? ?? 'Player';
+          final name = profile?['full_name'] as String? ?? 'Oyuncu';
           final avatarUrl = profile?['avatar_url'] as String?;
           final userId = request['user_id'] as String;
           final eventId = request['event_id'] as String;
@@ -703,7 +703,7 @@ class _JoinRequestsSection extends ConsumerWidget {
                       Text(name,
                           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
                       const SizedBox(height: 2),
-                      Text('${profile?['trust_score'] ?? 100} Trust Score',
+                      Text('${profile?['trust_score'] ?? 100} Güven Puanı',
                           style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11)),
                     ],
                   ),
@@ -714,7 +714,7 @@ class _JoinRequestsSection extends ConsumerWidget {
                       await ref.read(eventRepositoryProvider).updateJoinStatus(eventId, userId, 'rejected');
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Request rejected'), backgroundColor: Colors.orange),
+                          const SnackBar(content: Text('İstek reddedildi'), backgroundColor: Colors.orange),
                         );
                         onUpdate();
                       }
@@ -737,7 +737,7 @@ class _JoinRequestsSection extends ConsumerWidget {
                       await ref.read(eventRepositoryProvider).updateJoinStatus(eventId, userId, 'joined');
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Player approved!'), backgroundColor: MatchFitTheme.accentGreen),
+                          const SnackBar(content: Text('Oyuncu onaylandı!'), backgroundColor: MatchFitTheme.accentGreen),
                         );
                         onUpdate();
                       }
@@ -778,21 +778,21 @@ class _RosterSection extends StatelessWidget {
       children: [
         Row(
           children: [
-            const Text('Roster',
+            const Text('Kadro',
                 style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17)),
             const Spacer(),
-            Text('${roster.length} / $maxParticipants Players',
+            Text('${roster.length} / $maxParticipants Oyuncu',
                 style: const TextStyle(color: Color(0xFF4D9DFF), fontWeight: FontWeight.bold, fontSize: 13)),
           ],
         ),
         const SizedBox(height: 14),
         if (roster.isEmpty)
-          Text('No players yet. Be the first to join!',
+          Text('Henüz kimse katılmadı. İlk katılan sen ol!',
               style: TextStyle(color: Colors.white.withOpacity(0.35), fontSize: 13))
         else
           ...roster.asMap().entries.map((e) {
             final profile = e.value['profiles'] as Map<String, dynamic>?;
-            final name = profile?['full_name'] as String? ?? 'Player';
+            final name = profile?['full_name'] as String? ?? 'Oyuncu';
             final avatarUrl = profile?['avatar_url'] as String?;
             final pos = _positions[e.key % _positions.length];
             return Container(
@@ -874,7 +874,7 @@ class _BottomCta extends StatelessWidget {
                       elevation: 0,
                     ),
                     icon: const Icon(Icons.edit_outlined, size: 18),
-                    label: const Text('Edit Event',
+                    label: const Text('Etkinliği Düzenle',
                         style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15, letterSpacing: 0.5)),
                   ),
                 ),
@@ -937,10 +937,10 @@ class _BottomCta extends StatelessWidget {
   }
 
   String _getLabel() {
-    if (participantStatus == 'joined') return 'JOINED';
-    if (participantStatus == 'pending') return 'REQUEST SENT';
-    if (participantStatus == 'rejected') return 'REJECTED';
-    return 'JOIN EVENT';
+    if (participantStatus == 'joined') return 'KATILDIN';
+    if (participantStatus == 'pending') return 'İSTEK GÖNDERİLDİ';
+    if (participantStatus == 'rejected') return 'REDDEDİLDİ';
+    return 'ETKİNLİĞE KATIL';
   }
 }
 

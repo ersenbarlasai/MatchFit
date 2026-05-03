@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:matchfit/core/theme.dart';
 import 'package:matchfit/core/constants/sports_data.dart';
+import 'package:matchfit/core/l10n/app_localizations.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SportsSelectionScreen extends ConsumerStatefulWidget {
@@ -18,15 +19,16 @@ class _SportsSelectionScreenState extends ConsumerState<SportsSelectionScreen> {
   final Set<String> _selectedSubcategories = {};
   final Map<String, String> _skillLevels = {}; // Subcategory -> Level
 
-  final List<String> _levels = ['Beginner', 'Intermediate', 'Advanced'];
+  List<String> _getLevels(AppLocalizations t) => [t.beginner, t.intermediate, t.advanced];
 
   void _nextStep() {
+    final t = AppLocalizations.of(context);
     if (_currentStep == 1 && _selectedCategories.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select at least one category')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.selectAtLeastOneCategory)));
       return;
     }
     if (_currentStep == 2 && _selectedSubcategories.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select at least one sub-branch')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.selectAtLeastOneSubBranch)));
       return;
     }
     if (_currentStep < 3) {
@@ -37,10 +39,11 @@ class _SportsSelectionScreenState extends ConsumerState<SportsSelectionScreen> {
   }
 
   Future<void> _saveAndFinish() async {
+    final t = AppLocalizations.of(context);
     // Check if all selected subcategories have a skill level
     for (var sub in _selectedSubcategories) {
       if (!_skillLevels.containsKey(sub)) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Please select skill level for $sub')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.selectSkillLevelFor}$sub')));
         return;
       }
     }
@@ -78,18 +81,19 @@ class _SportsSelectionScreenState extends ConsumerState<SportsSelectionScreen> {
 
       if (mounted) context.go('/home');
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error saving preferences: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.errorSavingPreferences}: $e')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: Text('Step $_currentStep of 3', style: const TextStyle(fontSize: 14, color: Colors.white54)),
+        title: Text('${t.stepOf} $_currentStep / 3', style: const TextStyle(fontSize: 14, color: Colors.white54)),
         centerTitle: true,
         leading: _currentStep > 1 
           ? IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white), onPressed: () => setState(() => _currentStep--))
@@ -98,7 +102,7 @@ class _SportsSelectionScreenState extends ConsumerState<SportsSelectionScreen> {
       body: Column(
         children: [
           Expanded(
-            child: _buildCurrentStep(),
+            child: _buildCurrentStep(t),
           ),
           Padding(
             padding: const EdgeInsets.all(24.0),
@@ -110,7 +114,7 @@ class _SportsSelectionScreenState extends ConsumerState<SportsSelectionScreen> {
                 minimumSize: const Size(double.infinity, 56),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               ),
-              child: Text(_currentStep == 3 ? 'FINISH' : 'NEXT', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              child: Text(_currentStep == 3 ? t.finish : t.next.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             ),
           ),
         ],
@@ -118,23 +122,23 @@ class _SportsSelectionScreenState extends ConsumerState<SportsSelectionScreen> {
     );
   }
 
-  Widget _buildCurrentStep() {
+  Widget _buildCurrentStep(AppLocalizations t) {
     switch (_currentStep) {
-      case 1: return _buildCategorySelection();
-      case 2: return _buildSubcategorySelection();
-      case 3: return _buildSkillLevelSelection();
+      case 1: return _buildCategorySelection(t);
+      case 2: return _buildSubcategorySelection(t);
+      case 3: return _buildSkillLevelSelection(t);
       default: return const SizedBox();
     }
   }
 
-  Widget _buildCategorySelection() {
+  Widget _buildCategorySelection(AppLocalizations t) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 24),
-          child: Text('Choose your favorite\nsports categories', 
-            style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Text(t.chooseSportsCategories, 
+            style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
         ),
         const SizedBox(height: 24),
         Expanded(
@@ -155,7 +159,6 @@ class _SportsSelectionScreenState extends ConsumerState<SportsSelectionScreen> {
                   setState(() {
                     if (isSelected) {
                       _selectedCategories.remove(cat.name);
-                      // Also remove subcategories belonging to this category
                       for (var sub in cat.subcategories) {
                         _selectedSubcategories.remove(sub);
                       }
@@ -194,19 +197,14 @@ class _SportsSelectionScreenState extends ConsumerState<SportsSelectionScreen> {
     );
   }
 
-  Widget _buildSubcategorySelection() {
-    final availableSubs = sportsData
-        .where((cat) => _selectedCategories.contains(cat.name))
-        .expand((cat) => cat.subcategories)
-        .toList();
-
+  Widget _buildSubcategorySelection(AppLocalizations t) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 24),
-          child: Text('Choose sub branches', 
-            style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Text(t.chooseSubBranches, 
+            style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
         ),
         const SizedBox(height: 24),
         Expanded(
@@ -253,15 +251,16 @@ class _SportsSelectionScreenState extends ConsumerState<SportsSelectionScreen> {
     );
   }
 
-  Widget _buildSkillLevelSelection() {
+  Widget _buildSkillLevelSelection(AppLocalizations t) {
     final selectedList = _selectedSubcategories.toList();
+    final levels = _getLevels(t);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 24),
-          child: Text('What is your\nskill level?', 
-            style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Text(t.whatIsYourSkillLevel, 
+            style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
         ),
         const SizedBox(height: 24),
         Expanded(
@@ -278,7 +277,7 @@ class _SportsSelectionScreenState extends ConsumerState<SportsSelectionScreen> {
                     Text(sub, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 12),
                     Row(
-                      children: _levels.map((level) {
+                      children: levels.map((level) {
                         final isSelected = _skillLevels[sub] == level;
                         return Expanded(
                           child: GestureDetector(

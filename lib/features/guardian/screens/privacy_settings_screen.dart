@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:matchfit/core/theme.dart';
 import '../../guardian/repositories/guardian_repository.dart';
 import '../../auth/repositories/auth_repository.dart';
+import 'package:matchfit/core/l10n/app_localizations.dart';
+import 'package:matchfit/core/providers/locale_provider.dart';
 
 // State management for privacy settings
 class PrivacySettingsState {
@@ -107,7 +109,7 @@ class _PrivacySettingsScreenState extends ConsumerState<PrivacySettingsScreen> {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Privacy & Safety',
+        title: Text(AppLocalizations.of(context).privacySettings,
             style: TextStyle(fontWeight: FontWeight.bold)),
         elevation: 0,
         backgroundColor: Colors.transparent,
@@ -125,7 +127,7 @@ class _PrivacySettingsScreenState extends ConsumerState<PrivacySettingsScreen> {
                           children: [
                             const Icon(Icons.shield_outlined, color: Colors.black),
                             const SizedBox(width: 8),
-                            const Text('@Guardian: Settings saved!'),
+                            const Text('@Guardian: Ayarlar kaydedildi!'),
                           ],
                         ),
                         backgroundColor: MatchFitTheme.accentGreen,
@@ -135,7 +137,7 @@ class _PrivacySettingsScreenState extends ConsumerState<PrivacySettingsScreen> {
                 },
                 icon: const Icon(Icons.save_outlined,
                     color: MatchFitTheme.accentGreen, size: 18),
-                label: const Text('Save',
+                label: Text(AppLocalizations.of(context).save,
                     style: TextStyle(
                         color: MatchFitTheme.accentGreen,
                         fontWeight: FontWeight.bold)),
@@ -179,14 +181,14 @@ class _PrivacySettingsScreenState extends ConsumerState<PrivacySettingsScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('@Guardian Agent',
+                            const Text('@Guardian Asistanı',
                                 style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     color: MatchFitTheme.primaryBlue,
                                     fontSize: 13)),
                             const SizedBox(height: 2),
                             Text(
-                              'These settings control who can see your data. Changes apply instantly.',
+                              'Bu ayarlar verilerinizi kimlerin görebileceğini kontrol eder. Değişiklikler anında uygulanır.',
                               style: TextStyle(
                                   fontSize: 12,
                                   color: Colors.white.withOpacity(0.7)),
@@ -198,29 +200,71 @@ class _PrivacySettingsScreenState extends ConsumerState<PrivacySettingsScreen> {
                   ),
                 ),
 
+                // Section: Language
+                _SectionHeader(icon: Icons.language, title: 'Uygulama Dili / Language'),
+                const SizedBox(height: 12),
+                Consumer(
+                  builder: (context, ref, child) {
+                    final currentLocale = ref.watch(localeProvider);
+                    final notifier = ref.read(localeProvider.notifier);
+
+                    return Container(
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.white.withOpacity(0.08)),
+                      ),
+                      child: Column(
+                        children: [
+                          RadioListTile<String>(
+                            value: 'tr',
+                            groupValue: currentLocale.languageCode,
+                            activeColor: MatchFitTheme.accentGreen,
+                            title: const Text('Türkçe (TR)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                            onChanged: (val) {
+                              if (val != null) notifier.setLocale(val);
+                            },
+                          ),
+                          Divider(color: Colors.white.withOpacity(0.05), height: 1),
+                          RadioListTile<String>(
+                            value: 'en',
+                            groupValue: currentLocale.languageCode,
+                            activeColor: MatchFitTheme.accentGreen,
+                            title: const Text('English (EN)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                            onChanged: (val) {
+                              if (val != null) notifier.setLocale(val);
+                            },
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 32),
+
                 // Section: Profile Visibility
-                _SectionHeader(icon: Icons.person_outline, title: 'Profile Visibility'),
+                _SectionHeader(icon: Icons.person_outline, title: 'Profil Görünürlüğü'),
                 const SizedBox(height: 12),
                 _VisibilityOption(
                   icon: Icons.public,
-                  title: 'Public',
-                  subtitle: 'Anyone can see your profile and events.',
+                  title: 'Herkese Açık',
+                  subtitle: 'Profilinizi ve etkinliklerinizi herkes görebilir.',
                   value: 'public',
                   groupValue: settings.profileVisibility,
                   onChanged: notifier.setVisibility,
                 ),
                 _VisibilityOption(
                   icon: Icons.people_outline,
-                  title: 'Friends Only',
-                  subtitle: 'Only approved friends can view your full profile.',
+                  title: 'Sadece Arkadaşlar',
+                  subtitle: 'Sadece onaylı arkadaşlarınız tam profilinizi görebilir.',
                   value: 'friends_only',
                   groupValue: settings.profileVisibility,
                   onChanged: notifier.setVisibility,
                 ),
                 _VisibilityOption(
                   icon: Icons.lock_outline,
-                  title: 'Private',
-                  subtitle: 'Your profile is hidden. You can still join events.',
+                  title: 'Gizli',
+                  subtitle: 'Profiliniz gizlidir. Etkinliklere yine de katılabilirsiniz.',
                   value: 'private',
                   groupValue: settings.profileVisibility,
                   onChanged: notifier.setVisibility,
@@ -231,12 +275,12 @@ class _PrivacySettingsScreenState extends ConsumerState<PrivacySettingsScreen> {
                 // Section: Location Privacy (Strava-style)
                 _SectionHeader(
                     icon: Icons.location_on_outlined,
-                    title: 'Location Privacy (Home Zone)'),
+                    title: 'Konum Gizliliği (Ev Alanı)'),
                 const SizedBox(height: 8),
                 Padding(
                   padding: const EdgeInsets.only(bottom: 16),
                   child: Text(
-                    'Like Strava\'s Hidden Zone, this hides your precise location within a radius (e.g. around your home).',
+                    'Seçtiğiniz yarıçap içindeki konumunuz gizlenir (Örn: evinizin etrafı).',
                     style: TextStyle(
                         fontSize: 13, color: Colors.white.withOpacity(0.5)),
                   ),
@@ -248,7 +292,7 @@ class _PrivacySettingsScreenState extends ConsumerState<PrivacySettingsScreen> {
                     final isSelected =
                         settings.hideLocationRadius == radius;
                     final label = radius == 0
-                        ? 'Off'
+                        ? 'Kapalı'
                         : '${radius >= 1000 ? '${radius ~/ 1000} km' : '$radius m'}';
                     return ChoiceChip(
                       label: Text(label),
@@ -272,24 +316,24 @@ class _PrivacySettingsScreenState extends ConsumerState<PrivacySettingsScreen> {
                 // Section: Content Moderation
                 _SectionHeader(
                     icon: Icons.shield_moon_outlined,
-                    title: 'Content Moderation'),
+                    title: 'İçerik Denetimi'),
                 const SizedBox(height: 12),
                 _InfoTile(
                   icon: Icons.sms_failed_outlined,
                   iconColor: Colors.orangeAccent,
-                  title: 'Scam & Risk Detection',
+                  title: 'Risk ve Dolandırıcılık Taraması',
                   subtitle:
-                      '@Guardian scans messages for IBAN, phone number sharing, and suspicious links. Always active.',
-                  badge: 'ACTIVE',
+                      '@Guardian Asistanı mesajları IBAN, telefon numarası ve şüpheli linklere karşı tarar. Her zaman aktiftir.',
+                  badge: 'AKTİF',
                 ),
                 const SizedBox(height: 12),
                 _InfoTile(
                   icon: Icons.no_adult_content,
                   iconColor: Colors.redAccent,
-                  title: 'Profanity Filter',
+                  title: 'Küfür Filtresi',
                   subtitle:
-                      'Offensive language in event titles and descriptions is automatically blocked.',
-                  badge: 'ACTIVE',
+                      'Etkinlik başlıklarında ve açıklamalardaki argo kelimeler otomatik olarak engellenir.',
+                  badge: 'AKTİF',
                 ),
 
                 const SizedBox(height: 32),
@@ -297,7 +341,7 @@ class _PrivacySettingsScreenState extends ConsumerState<PrivacySettingsScreen> {
                 // Section: Account
                 _SectionHeader(
                     icon: Icons.manage_accounts_outlined,
-                    title: 'Account Management'),
+                    title: 'Hesap Yönetimi'),
                 const SizedBox(height: 12),
                 _LogoutTile(),
 
@@ -317,7 +361,7 @@ class _LogoutTile extends ConsumerWidget {
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E1E),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Oturumu Kapat', 
+        title: Text(AppLocalizations.of(context).logOut, 
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         content: Text(
           'Hesabınızdan çıkış yapmak istediğinize emin misiniz?',
@@ -326,7 +370,7 @@ class _LogoutTile extends ConsumerWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Vazgeç', style: TextStyle(color: Colors.white.withOpacity(0.5))),
+            child: Text(AppLocalizations.of(context).cancel, style: TextStyle(color: Colors.white.withOpacity(0.5))),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -335,7 +379,7 @@ class _LogoutTile extends ConsumerWidget {
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            child: const Text('Çıkış Yap', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text(AppLocalizations.of(context).logOut, style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -367,7 +411,7 @@ class _LogoutTile extends ConsumerWidget {
           ),
           child: const Icon(Icons.logout_rounded, color: Color(0xFFFF4B4B), size: 20),
         ),
-        title: const Text('Güvenli Çıkış Yap',
+        title: Text(AppLocalizations.of(context).logOut,
             style: TextStyle(color: Color(0xFFFF4B4B), fontWeight: FontWeight.bold)),
         subtitle: Text('Oturumunuzu sonlandırın.',
             style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12)),

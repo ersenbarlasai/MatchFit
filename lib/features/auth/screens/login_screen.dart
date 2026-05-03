@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:matchfit/core/theme.dart';
+import 'package:matchfit/core/l10n/app_localizations.dart';
 import '../repositories/auth_repository.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -18,9 +19,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _obscurePassword = true;
 
   Future<void> _submit() async {
+    final t = AppLocalizations.of(context);
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Lütfen e-posta ve şifrenizi girin')),
+        SnackBar(content: Text(t.pleaseEnterEmailPassword)),
       );
       return;
     }
@@ -36,7 +38,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Giriş Hatası: $e')),
+          SnackBar(content: Text('${t.loginError}: $e')),
         );
       }
     } finally {
@@ -46,6 +48,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
     return Scaffold(
       backgroundColor: const Color(0xFF121314),
       body: SafeArea(
@@ -57,9 +60,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               const SizedBox(height: 60),
               
               // Title
-              const Text(
-                'Welcome Back',
-                style: TextStyle(
+              Text(
+                t.welcomeBack,
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 36,
                   fontWeight: FontWeight.w900,
@@ -71,7 +74,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               
               // Subtitle
               Text(
-                'Sign in to continue to MATCHFIT.',
+                t.signInSubtitle,
                 style: TextStyle(
                   color: Colors.white.withOpacity(0.8),
                   fontSize: 16,
@@ -82,24 +85,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               const SizedBox(height: 48),
               
               // Email Field Label
-              const Text('Email Address', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+              Text(t.emailAddress, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
               const SizedBox(height: 8),
               // Email Field
               _buildTextField(
                 controller: _emailController,
-                hintText: 'Enter your email',
+                hintText: t.enterEmail,
                 icon: Icons.mail_outline,
                 keyboardType: TextInputType.emailAddress,
               ),
               const SizedBox(height: 20),
               
               // Password Field Label
-              const Text('Password', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+              Text(t.password, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
               const SizedBox(height: 8),
               // Password Field
               _buildTextField(
                 controller: _passwordController,
-                hintText: 'Enter your password',
+                hintText: t.enterPassword,
                 icon: Icons.lock_outline,
                 obscureText: _obscurePassword,
                 onSuffixTap: () {
@@ -115,9 +118,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 alignment: Alignment.centerRight,
                 child: GestureDetector(
                   onTap: () => context.push('/reset-password'),
-                  child: const Text(
-                    'Forgot Password?',
-                    style: TextStyle(
+                  child: Text(
+                    t.forgotPassword,
+                    style: const TextStyle(
                       color: Color(0xFFB4C5FF),
                       fontWeight: FontWeight.w600,
                       fontSize: 14,
@@ -146,7 +149,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         width: 20,
                         child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2),
                       )
-                    : const Text('SIGN IN', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15, letterSpacing: 0.5)),
+                    : Text(t.signIn, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, letterSpacing: 0.5)),
               ),
               const SizedBox(height: 40),
               
@@ -157,7 +160,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Text(
-                      'Or continue with',
+                      t.orContinueWith,
                       style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12, fontWeight: FontWeight.w500),
                     ),
                   ),
@@ -205,14 +208,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    "Don't have an account? ",
+                    t.dontHaveAccount,
                     style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 15),
                   ),
                   GestureDetector(
                     onTap: () => context.push('/signup'),
-                    child: const Text(
-                      'Sign Up',
-                      style: TextStyle(color: Color(0xFFB4C5FF), fontWeight: FontWeight.bold, fontSize: 15),
+                    child: Text(
+                      t.signUp,
+                      style: const TextStyle(color: Color(0xFFB4C5FF), fontWeight: FontWeight.bold, fontSize: 15),
                     ),
                   ),
                 ],

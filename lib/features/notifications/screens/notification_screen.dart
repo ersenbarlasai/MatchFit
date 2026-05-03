@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:matchfit/core/theme.dart';
 import 'package:matchfit/core/widgets/avatar_widget.dart';
+import 'package:matchfit/core/l10n/app_localizations.dart';
 import '../repositories/notification_repository.dart';
 import 'package:intl/intl.dart';
 import 'package:matchfit/features/profile/repositories/social_repository.dart';
@@ -13,6 +14,7 @@ class NotificationScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final notificationsAsync = ref.watch(notificationsProvider);
+    final t = AppLocalizations.of(context);
 
     return DefaultTabController(
       length: 2,
@@ -23,10 +25,16 @@ class NotificationScreen extends ConsumerWidget {
           elevation: 0,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
-            onPressed: () => context.pop(),
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/home');
+              }
+            },
           ),
-          title: const Text('Notifications',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
+          title: Text(t.notifications,
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
           actions: [
             PopupMenuButton<String>(
               icon: const Icon(Icons.more_vert, color: Colors.white),
@@ -40,41 +48,41 @@ class NotificationScreen extends ConsumerWidget {
                 }
               },
               itemBuilder: (context) => [
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'mark_all_read',
-                  child: Text('Tümünü okundu işaretle', style: TextStyle(color: Colors.white)),
+                  child: Text(t.markAllRead, style: const TextStyle(color: Colors.white)),
                 ),
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'delete_all',
-                  child: Text('Tümünü sil', style: TextStyle(color: Colors.redAccent)),
+                  child: Text(t.deleteAll, style: const TextStyle(color: Colors.redAccent)),
                 ),
               ],
             ),
           ],
-          bottom: const TabBar(
+          bottom: TabBar(
             indicatorColor: MatchFitTheme.accentGreen,
             labelColor: MatchFitTheme.accentGreen,
             unselectedLabelColor: Colors.white54,
             tabs: [
-              Tab(text: 'Okunmamış'),
-              Tab(text: 'Okunmuş'),
+              Tab(text: t.unread),
+              Tab(text: t.read),
             ],
           ),
         ),
         body: notificationsAsync.when(
           data: (notifications) {
             final unread = notifications.where((n) => n['is_read'] != true).toList();
-            final read = notifications.where((n) => n['is_read'] == true).toList();
+            final readList = notifications.where((n) => n['is_read'] == true).toList();
 
             return TabBarView(
               children: [
-                _buildList(unread, 'Harika!', 'Okunmamış bildiriminiz yok.'),
-                _buildList(read, 'Bildirim yok', ''),
+                _buildList(unread, t.great, t.noUnreadNotifications),
+                _buildList(readList, t.noNotifications, ''),
               ],
             );
           },
           loading: () => const Center(child: CircularProgressIndicator(color: MatchFitTheme.accentGreen)),
-          error: (e, _) => Center(child: Text('Error: $e', style: const TextStyle(color: Colors.red))),
+          error: (e, _) => Center(child: Text('${t.error}: $e', style: const TextStyle(color: Colors.red))),
         ),
       ),
     );
@@ -123,9 +131,10 @@ class _NotificationItemState extends ConsumerState<_NotificationItem> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
     final isRead = widget.notification['is_read'] as bool? ?? false;
     final createdAt = DateTime.parse(widget.notification['created_at']);
-    final timeStr = _formatTime(createdAt);
+    final timeStr = _formatTime(createdAt, t);
     final type = widget.notification['type'] as String?;
     final senderId = widget.notification['sender_id'] as String?;
 
@@ -223,7 +232,7 @@ class _NotificationItemState extends ConsumerState<_NotificationItem> {
                     child: ElevatedButton(
                       onPressed: () async {
                         if (senderId != null) {
-                          setState(() { _isHandled = true; _handleStatus = 'Accepted'; });
+                          setState(() { _isHandled = true; _handleStatus = t.accepted; });
                           await ref.read(socialRepositoryProvider).updateFollowStatus(senderId, true);
                           await ref.read(notificationRepositoryProvider).markAsRead(widget.notification['id']);
                         }
@@ -234,7 +243,7 @@ class _NotificationItemState extends ConsumerState<_NotificationItem> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         padding: const EdgeInsets.symmetric(vertical: 8),
                       ),
-                      child: const Text('Accept', style: TextStyle(fontWeight: FontWeight.bold)),
+                      child: Text(t.accept, style: const TextStyle(fontWeight: FontWeight.bold)),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -242,7 +251,7 @@ class _NotificationItemState extends ConsumerState<_NotificationItem> {
                     child: OutlinedButton(
                       onPressed: () async {
                         if (senderId != null) {
-                          setState(() { _isHandled = true; _handleStatus = 'Rejected'; });
+                          setState(() { _isHandled = true; _handleStatus = t.rejected; });
                           await ref.read(socialRepositoryProvider).updateFollowStatus(senderId, false);
                           await ref.read(notificationRepositoryProvider).markAsRead(widget.notification['id']);
                         }
@@ -253,7 +262,7 @@ class _NotificationItemState extends ConsumerState<_NotificationItem> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         padding: const EdgeInsets.symmetric(vertical: 8),
                       ),
-                      child: const Text('Reject', style: TextStyle(fontWeight: FontWeight.bold)),
+                      child: Text(t.reject, style: const TextStyle(fontWeight: FontWeight.bold)),
                     ),
                   ),
                 ],
@@ -265,15 +274,15 @@ class _NotificationItemState extends ConsumerState<_NotificationItem> {
               child: Row(
                 children: [
                   Icon(
-                    _handleStatus == 'Accepted' ? Icons.check_circle_outline : Icons.cancel_outlined,
+                    _handleStatus == t.accepted ? Icons.check_circle_outline : Icons.cancel_outlined,
                     size: 16,
-                    color: _handleStatus == 'Accepted' ? MatchFitTheme.accentGreen : Colors.white30,
+                    color: _handleStatus == t.accepted ? MatchFitTheme.accentGreen : Colors.white30,
                   ),
                   const SizedBox(width: 8),
                   Text(
                     _handleStatus!,
                     style: TextStyle(
-                      color: _handleStatus == 'Accepted' ? MatchFitTheme.accentGreen : Colors.white30,
+                      color: _handleStatus == t.accepted ? MatchFitTheme.accentGreen : Colors.white30,
                       fontWeight: FontWeight.bold,
                       fontSize: 13,
                     ),
@@ -327,12 +336,12 @@ class _NotificationItemState extends ConsumerState<_NotificationItem> {
     );
   }
 
-  String _formatTime(DateTime date) {
+  String _formatTime(DateTime date, AppLocalizations t) {
     final now = DateTime.now();
     final diff = now.difference(date);
-    if (diff.inMinutes < 1) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inMinutes < 1) return t.justNow;
+    if (diff.inMinutes < 60) return '${diff.inMinutes} ${t.minutesAgo}';
+    if (diff.inHours < 24) return '${diff.inHours} ${t.hoursAgo}';
     return DateFormat('MMM d').format(date);
   }
 }

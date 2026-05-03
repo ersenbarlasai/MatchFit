@@ -12,5 +12,11 @@ final currentUserProfileProvider = FutureProvider.autoDispose<Map<String, dynami
       .eq('id', user.id)
       .maybeSingle();
 
-  return response;
+  final mergedProfile = {
+    'full_name': response?['full_name'] ?? user.userMetadata?['full_name'] ?? 'U',
+    'avatar_url': response?['avatar_url'] ?? user.userMetadata?['avatar_url'],
+    'trust_score': response?['trust_score'] ?? 100,
+  };
+
+  return mergedProfile;
 });

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:matchfit/core/theme.dart';
+import 'package:matchfit/core/l10n/app_localizations.dart';
 import '../repositories/auth_repository.dart';
 
 class ProfileSetupScreen extends ConsumerStatefulWidget {
@@ -18,9 +19,10 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   bool _isLoading = false;
 
   Future<void> _saveProfile() async {
+    final t = AppLocalizations.of(context);
     if (_nameController.text.isEmpty || _cityController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Lütfen adınızı ve şehrinizi girin')),
+        SnackBar(content: Text(t.pleaseEnterNameCity)),
       );
       return;
     }
@@ -40,7 +42,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Profil kaydedilirken hata oluştu: $e')),
+          SnackBar(content: Text('${t.profileSaveError}: $e')),
         );
       }
     } finally {
@@ -50,10 +52,11 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Profili Tamamla', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Text(t.completeProfile, style: const TextStyle(fontWeight: FontWeight.bold)),
         elevation: 0,
         backgroundColor: Colors.transparent,
       ),
@@ -86,18 +89,18 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
             TextField(
               controller: _nameController,
               style: const TextStyle(fontWeight: FontWeight.w600),
-              decoration: const InputDecoration(
-                labelText: 'Ad Soyad',
-                prefixIcon: Icon(Icons.person_outline),
+              decoration: InputDecoration(
+                labelText: t.nameAndSurname,
+                prefixIcon: const Icon(Icons.person_outline),
               ),
             ),
             const SizedBox(height: 16),
             TextField(
               controller: _cityController,
               style: const TextStyle(fontWeight: FontWeight.w600),
-              decoration: const InputDecoration(
-                labelText: 'Şehir',
-                prefixIcon: Icon(Icons.location_city_outlined),
+              decoration: InputDecoration(
+                labelText: t.city,
+                prefixIcon: const Icon(Icons.location_city_outlined),
               ),
             ),
             const SizedBox(height: 16),
@@ -105,8 +108,8 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
               controller: _bioController,
               maxLines: 3,
               style: const TextStyle(fontWeight: FontWeight.w600),
-              decoration: const InputDecoration(
-                labelText: 'Hakkında (Partnerlerine kendinden bahset)',
+              decoration: InputDecoration(
+                labelText: t.aboutYou,
                 alignLabelWithHint: true,
               ),
             ),
@@ -115,7 +118,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
               onPressed: _isLoading ? null : _saveProfile,
               child: _isLoading 
                 ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2))
-                : const Text('SPOR SEÇİMİNE DEVAM ET', style: TextStyle(letterSpacing: 1.5, fontWeight: FontWeight.bold)),
+                : Text(t.continueToSportSelection, style: const TextStyle(letterSpacing: 1.5, fontWeight: FontWeight.bold)),
             ),
           ],
         ),
