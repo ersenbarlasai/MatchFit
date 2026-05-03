@@ -20,7 +20,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   Future<void> _saveProfile() async {
     if (_nameController.text.isEmpty || _cityController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your name and city')),
+        const SnackBar(content: Text('Lütfen adınızı ve şehrinizi girin')),
       );
       return;
     }
@@ -40,7 +40,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error saving profile: $e')),
+          SnackBar(content: Text('Profil kaydedilirken hata oluştu: $e')),
         );
       }
     } finally {
@@ -53,7 +53,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Complete Profile', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('Profili Tamamla', style: TextStyle(fontWeight: FontWeight.bold)),
         elevation: 0,
         backgroundColor: Colors.transparent,
       ),
@@ -87,7 +87,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
               controller: _nameController,
               style: const TextStyle(fontWeight: FontWeight.w600),
               decoration: const InputDecoration(
-                labelText: 'Full Name',
+                labelText: 'Ad Soyad',
                 prefixIcon: Icon(Icons.person_outline),
               ),
             ),
@@ -96,7 +96,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
               controller: _cityController,
               style: const TextStyle(fontWeight: FontWeight.w600),
               decoration: const InputDecoration(
-                labelText: 'City',
+                labelText: 'Şehir',
                 prefixIcon: Icon(Icons.location_city_outlined),
               ),
             ),
@@ -106,7 +106,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
               maxLines: 3,
               style: const TextStyle(fontWeight: FontWeight.w600),
               decoration: const InputDecoration(
-                labelText: 'Bio (Tell potential partners about yourself)',
+                labelText: 'Hakkında (Partnerlerine kendinden bahset)',
                 alignLabelWithHint: true,
               ),
             ),
@@ -115,7 +115,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
               onPressed: _isLoading ? null : _saveProfile,
               child: _isLoading 
                 ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2))
-                : const Text('CONTINUE TO SPORTS', style: TextStyle(letterSpacing: 1.5, fontWeight: FontWeight.bold)),
+                : const Text('SPOR SEÇİMİNE DEVAM ET', style: TextStyle(letterSpacing: 1.5, fontWeight: FontWeight.bold)),
             ),
           ],
         ),

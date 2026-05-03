@@ -291,9 +291,87 @@ class _PrivacySettingsScreenState extends ConsumerState<PrivacySettingsScreen> {
                   badge: 'ACTIVE',
                 ),
 
+                const SizedBox(height: 32),
+
+                // Section: Account
+                _SectionHeader(
+                    icon: Icons.manage_accounts_outlined,
+                    title: 'Account Management'),
+                const SizedBox(height: 12),
+                _LogoutTile(),
+
                 const SizedBox(height: 40),
               ],
             ),
+    );
+  }
+}
+
+class _LogoutTile extends ConsumerWidget {
+  const _LogoutTile();
+
+  Future<void> _handleLogout(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Oturumu Kapat', 
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: Text(
+          'Hesabınızdan çıkış yapmak istediğinize emin misiniz?',
+          style: TextStyle(color: Colors.white.withOpacity(0.7), height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Vazgeç', style: TextStyle(color: Colors.white.withOpacity(0.5))),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF4B4B),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Çıkış Yap', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await ref.read(authRepositoryProvider).signOut();
+      if (context.mounted) {
+        context.go('/login');
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
+      ),
+      child: ListTile(
+        onTap: () => _handleLogout(context, ref),
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.red.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Icon(Icons.logout_rounded, color: Color(0xFFFF4B4B), size: 20),
+        ),
+        title: const Text('Güvenli Çıkış Yap',
+            style: TextStyle(color: Color(0xFFFF4B4B), fontWeight: FontWeight.bold)),
+        subtitle: Text('Oturumunuzu sonlandırın.',
+            style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12)),
+        trailing: Icon(Icons.arrow_forward_ios, color: Colors.white.withOpacity(0.1), size: 14),
+      ),
     );
   }
 }

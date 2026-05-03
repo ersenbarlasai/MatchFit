@@ -51,6 +51,80 @@ final weeklyStatsProvider = FutureProvider.autoDispose<Map<String, dynamic>>((re
   return {'runs': runs, 'games': games, 'points': points, 'total': list.length};
 });
 
+final recommendedEventsProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
+  final user = ref.read(authRepositoryProvider).currentUser;
+  if (user == null) return [];
+
+  try {
+    // 1. Get user's preferred sports and categories
+    final activityResponse = await Supabase.instance.client
+        .from('event_participants')
+        .select('events(sport_id, sports(category))')
+        .eq('user_id', user.id);
+    
+    final hostedResponse = await Supabase.instance.client
+        .from('events')
+        .select('sport_id, sports(category)')
+        .eq('host_id', user.id);
+
+    final activity = List<Map<String, dynamic>>.from(activityResponse);
+    final hosted = List<Map<String, dynamic>>.from(hostedResponse);
+
+    final preferredSports = {
+      ...activity.map((e) => e['events']?['sport_id']),
+      ...hosted.map((e) => e['sport_id']),
+    }.where((id) => id != null).cast<int>().toList();
+
+    final preferredCategories = {
+      ...activity.map((e) => e['events']?['sports']?['category']),
+      ...hosted.map((e) => e['sports']?['category']),
+    }.where((cat) => cat != null).cast<String>().toList();
+
+    // 2. Build query
+    dynamic query = Supabase.instance.client
+        .from('events')
+        .select('*, sports(name, category), profiles(full_name, avatar_url)')
+        .eq('status', 'open')
+        .neq('host_id', user.id);
+
+    if (preferredSports.isNotEmpty) {
+      query = query.filter('sport_id', 'in', '(${preferredSports.join(',')})');
+    } else if (preferredCategories.isNotEmpty) {
+      query = query.filter('sports.category', 'in', '(${preferredCategories.map((c) => "\"$c\"").join(',')})');
+    }
+
+    final response = await query.limit(10);
+    final allEvents = List<Map<String, dynamic>>.from(response);
+
+    // 3. Filter out already joined events
+    final joinedIdsResponse = await Supabase.instance.client
+        .from('event_participants')
+        .select('event_id')
+        .eq('user_id', user.id);
+    final joinedIds = List<Map<String, dynamic>>.from(joinedIdsResponse).map((e) => e['event_id'].toString()).toList();
+
+    final filtered = allEvents.where((e) => !joinedIds.contains(e['id'].toString())).toList();
+    
+    // If we still have nothing (e.g. user joined everything in their interest), 
+    // show general open events as fallback
+    if (filtered.isEmpty && (preferredSports.isNotEmpty || preferredCategories.isNotEmpty)) {
+      final fallback = await Supabase.instance.client
+          .from('events')
+          .select('*, sports(name, category), profiles(full_name, avatar_url)')
+          .eq('status', 'open')
+          .neq('host_id', user.id)
+          .limit(5);
+      final fallbackList = List<Map<String, dynamic>>.from(fallback);
+      return fallbackList.where((e) => !joinedIds.contains(e['id'].toString())).toList();
+    }
+
+    return filtered;
+  } catch (e) {
+    print('Öneri Hatası: $e');
+    return [];
+  }
+});
+
 // ── Home Screen ─────────────────────────────────────────────────────
 
 class HomeScreen extends ConsumerWidget {
@@ -118,7 +192,7 @@ class HomeScreen extends ConsumerWidget {
                               text: TextSpan(
                                 children: [
                                   TextSpan(
-                                    text: 'Hello $firstName ',
+                                    text: 'Merhaba $firstName ',
                                     style: const TextStyle(
                                       color: Color(0xFF4D9DFF),
                                       fontWeight: FontWeight.w900,
@@ -129,7 +203,7 @@ class HomeScreen extends ConsumerWidget {
                                 ],
                               ),
                             ),
-                            Text('Ready to move?',
+                            Text('Harekete hazır mısın?',
                                 style: TextStyle(
                                     color: Colors.white.withOpacity(0.45),
                                     fontSize: 12)),
@@ -183,14 +257,14 @@ class HomeScreen extends ConsumerWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Weekly Progress',
+                        const Text('Haftalık Gelişim',
                             style: TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w900,
                                 fontSize: 20)),
                         TextButton(
                           onPressed: () => context.push('/profile'),
-                          child: const Text('Details',
+                          child: const Text('Detaylar',
                               style: TextStyle(color: Color(0xFF4D9DFF), fontSize: 13)),
                         ),
                       ],
@@ -206,6 +280,39 @@ class HomeScreen extends ConsumerWidget {
               ),
             ),
 
+            // ── Recommended for You ──
+            SliverToBoxAdapter(
+              child: ref.watch(recommendedEventsProvider).when(
+                data: (events) => events.isEmpty 
+                  ? const SizedBox.shrink() 
+                  : Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 32, 0, 0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Sana Özel Öneriler',
+                              style: TextStyle(
+                                  color: Colors.white, fontWeight: FontWeight.w900, fontSize: 20)),
+                          const SizedBox(height: 14),
+                          SizedBox(
+                            height: 200,
+                            child: ListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: events.length,
+                              itemBuilder: (context, index) {
+                                final event = events[index];
+                                return _RecommendedEventCard(event: event);
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                loading: () => const SizedBox.shrink(),
+                error: (_, __) => const SizedBox.shrink(),
+              ),
+            ),
+
             // ── Suggested Members ──
             SliverToBoxAdapter(
               child: Padding(
@@ -213,13 +320,13 @@ class HomeScreen extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Suggested Members',
+                    const Text('Önerilen Üyeler',
                         style: TextStyle(
                             color: Colors.white, fontWeight: FontWeight.w900, fontSize: 20)),
                     const SizedBox(height: 14),
                     ref.watch(suggestedMembersProvider).when(
                       loading: () => const SizedBox(height: 100, child: Center(child: CircularProgressIndicator(color: MatchFitTheme.accentGreen))),
-                      error: (e, _) => Text('Error: $e', style: const TextStyle(color: Colors.white24)),
+                      error: (e, _) => Text('Hata: $e', style: const TextStyle(color: Colors.white24)),
                       data: (members) => SizedBox(
                         height: 110,
                         child: ListView.builder(
@@ -244,14 +351,14 @@ class HomeScreen extends ConsumerWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Near You',
+                    const Text('Yakınındaki Etkinlikler',
                         style: TextStyle(
                             color: Colors.white, fontWeight: FontWeight.w900, fontSize: 20)),
                     TextButton(
                       onPressed: () => context.push('/explore'),
                       child: const Padding(
                         padding: EdgeInsets.only(right: 20),
-                        child: Text('See Map',
+                        child: Text('Haritayı Gör',
                             style: TextStyle(color: Color(0xFF4D9DFF), fontSize: 13)),
                       ),
                     ),
@@ -270,12 +377,12 @@ class HomeScreen extends ConsumerWidget {
                     child: Center(child: CircularProgressIndicator(color: MatchFitTheme.accentGreen)),
                   ),
                   error: (e, _) => Center(
-                    child: Text('Error: $e', style: const TextStyle(color: Colors.white54)),
+                    child: Text('Hata: $e', style: const TextStyle(color: Colors.white54)),
                   ),
                   data: (events) => events.isEmpty
                       ? Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 20),
-                          child: Text('No events nearby.',
+                          child: Text('Yakınlarda etkinlik bulunamadı.',
                               style: TextStyle(color: Colors.white.withOpacity(0.35))),
                         )
                       : SizedBox(
@@ -328,11 +435,11 @@ class _WeeklyProgressCard extends StatelessWidget {
               const Icon(Icons.local_fire_department_outlined,
                   color: MatchFitTheme.accentGreen, size: 22),
               const SizedBox(width: 8),
-              Text('$streakDays Day Streak',
+              Text('$streakDays Günlük Seri',
                   style: const TextStyle(
                       color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17)),
               const Spacer(),
-              Text('$goalPct% Goal',
+              Text('%$goalPct Hedef',
                   style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 13)),
             ],
           ),
@@ -349,16 +456,104 @@ class _WeeklyProgressCard extends StatelessWidget {
           const SizedBox(height: 18),
           Row(
             children: [
-              Expanded(child: _MiniStat(label: 'Runs', value: '$runs/3')),
+              Expanded(child: _MiniStat(label: 'Koşu', value: '$runs/3')),
               const SizedBox(width: 10),
-              Expanded(child: _MiniStat(label: 'Games', value: '$games/2')),
+              Expanded(child: _MiniStat(label: 'Maç', value: '$games/2')),
               const SizedBox(width: 10),
-              Expanded(child: _MiniStat(label: 'Points', value: '$points')),
+              Expanded(child: _MiniStat(label: 'Puan', value: '$points')),
             ],
           ),
         ],
       ),
     );
+  }
+}
+
+class _RecommendedEventCard extends StatelessWidget {
+  final Map<String, dynamic> event;
+  const _RecommendedEventCard({required this.event});
+
+  @override
+  Widget build(BuildContext context) {
+    final title = event['title'] as String? ?? 'Etkinlik';
+    final sport = event['sports']?['name'] as String? ?? 'Spor';
+    final location = (event['location_name'] as String? ?? '').split(',').first;
+    final time = event['start_time'] as String? ?? '12:00';
+
+    return GestureDetector(
+      onTap: () => context.push('/event-detail', extra: event),
+      child: Container(
+        width: 300,
+        margin: const EdgeInsets.only(right: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1E1E1E),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.white.withOpacity(0.08)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                color: MatchFitTheme.accentGreen.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(_getSportIcon(sport), color: MatchFitTheme.accentGreen),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: MatchFitTheme.accentGreen.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text('Sana Özel AI', style: TextStyle(color: MatchFitTheme.accentGreen, fontSize: 10, fontWeight: FontWeight.bold)),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(Icons.location_on, size: 12, color: Colors.white.withOpacity(0.5)),
+                      const SizedBox(width: 4),
+                      Text(location, style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12)),
+                      const SizedBox(width: 12),
+                      Icon(Icons.access_time, size: 12, color: Colors.white.withOpacity(0.5)),
+                      const SizedBox(width: 4),
+                      Text(time.substring(0, 5), style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: MatchFitTheme.accentGreen,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Text('Katıl', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  IconData _getSportIcon(String sport) {
+    final s = sport.toLowerCase();
+    if (s.contains('tenis')) return Icons.sports_tennis;
+    if (s.contains('basketbol')) return Icons.sports_basketball;
+    if (s.contains('futbol')) return Icons.sports_soccer;
+    if (s.contains('koşu')) return Icons.directions_run;
+    return Icons.sports;
   }
 }
 
@@ -556,7 +751,7 @@ class EventCard extends StatelessWidget {
                             color: MatchFitTheme.accentGreen,
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          child: const Text('Join',
+                          child: const Text('Katıl',
                               style: TextStyle(
                                   color: Colors.black,
                                   fontWeight: FontWeight.w900,

@@ -161,6 +161,46 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     );
   }
 
+  Future<bool?> _showLogoutDialog(BuildContext context) {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Oturumu Kapat', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: Text(
+          'Hesabınızdan çıkış yapmak istediğinize emin misiniz?',
+          style: TextStyle(color: Colors.white.withOpacity(0.7), height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Vazgeç', style: TextStyle(color: Colors.white.withOpacity(0.5))),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF4B4B),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Çıkış Yap', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _handleLogout() async {
+    final confirmed = await _showLogoutDialog(context);
+    if (confirmed == true) {
+      await ref.read(authRepositoryProvider).signOut();
+      if (mounted) {
+        context.go('/login');
+      }
+    }
+  }
+
   Future<bool?> _showBlockDialog(BuildContext context, String name) {
     return showDialog<bool>(
       context: context,
@@ -223,13 +263,44 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               }
             },
           ),
-          title: Text(isMe ? 'My Profile' : 'Player Profile',
+          title: Text(isMe ? 'Profilim' : 'Oyuncu Profili',
               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
           actions: [
             if (isMe)
-              IconButton(
+              PopupMenuButton<String>(
                 icon: const Icon(Icons.settings_outlined, color: Colors.white),
-                onPressed: () => context.push('/privacy-settings'),
+                color: const Color(0xFF1E1E1E),
+                offset: const Offset(0, 40),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                onSelected: (value) async {
+                  if (value == 'settings') {
+                    context.push('/privacy-settings');
+                  } else if (value == 'logout') {
+                    await _handleLogout();
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'settings',
+                    child: Row(
+                      children: [
+                        Icon(Icons.shield_outlined, color: Colors.white70, size: 18),
+                        SizedBox(width: 12),
+                        Text('Gizlilik Ayarları', style: TextStyle(color: Colors.white70)),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'logout',
+                    child: Row(
+                      children: [
+                        Icon(Icons.logout_rounded, color: Color(0xFFFF4B4B), size: 18),
+                        SizedBox(width: 12),
+                        Text('Çıkış Yap', style: TextStyle(color: Color(0xFFFF4B4B), fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                ],
               )
             else
               Builder(
@@ -320,7 +391,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 children: [
                   Icon(Icons.location_on_outlined, size: 14, color: Colors.white.withOpacity(0.5)),
                   const SizedBox(width: 4),
-                  Text('MatchFit Player',
+                  Text('MatchFit Oyuncusu',
                       style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 13)),
                 ],
               ),
@@ -350,7 +421,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                           ),
                           const SizedBox(width: 12),
                           Expanded(
-                            child: Text('$name wants to follow you',
+                            child: Text('$name seni takip etmek istiyor',
                                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
                           ),
                         ],
@@ -371,7 +442,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                 elevation: 0,
                               ),
-                              child: const Text('Accept', style: TextStyle(fontWeight: FontWeight.bold)),
+                              child: const Text('Onayla', style: TextStyle(fontWeight: FontWeight.bold)),
                             ),
                           ),
                           const SizedBox(width: 10),
@@ -387,7 +458,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                 padding: const EdgeInsets.symmetric(vertical: 10),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                               ),
-                              child: const Text('Reject', style: TextStyle(fontWeight: FontWeight.bold)),
+                              child: const Text('Reddet', style: TextStyle(fontWeight: FontWeight.bold)),
                             ),
                           ),
                         ],
@@ -435,10 +506,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                         ),
                         child: Text(
                             isMe
-                                ? 'Edit Profile'
+                                ? 'Profili Düzenle'
                                 : (relationshipStatus == 'following'
-                                    ? 'Following ✓'
-                                    : (relationshipStatus == 'pending' ? 'Pending…' : 'Follow')),
+                                    ? 'Takip Ediliyor ✓'
+                                    : (relationshipStatus == 'pending' ? 'Beklemede…' : 'Takip Et')),
                             style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
                       ),
                     ),
@@ -454,7 +525,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                           ),
                           icon: const Icon(Icons.person_add_outlined, size: 16),
-                          label: const Text('Invite',
+                          label: const Text('Davet Et',
                               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                         ),
                       )
@@ -526,13 +597,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Row(
                   children: [
-                    _StatCard(value: '$joined', label: 'EVENTS\nJOINED', accentColor: Colors.white),
+                    _StatCard(value: '$joined', label: 'KATILDIĞI\nETKİNLİKLER', accentColor: Colors.white),
                     const SizedBox(width: 10),
-                    _StatCard(value: '$hosted', label: 'EVENTS\nHOSTED', accentColor: Colors.white),
+                    _StatCard(value: '$hosted', label: 'DÜZENLEDİĞİ\nETKİNLİKLER', accentColor: Colors.white),
                     const SizedBox(width: 10),
                     _StatCard(
                         value: '$completion%',
-                        label: 'COMPLETION',
+                        label: 'TAMAMLAMA',
                         accentColor: MatchFitTheme.accentGreen),
                   ],
                 ),
@@ -554,10 +625,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 indicatorSize: TabBarIndicatorSize.label,
                 labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                 tabs: const [
-                  Tab(text: 'Posts'),
-                  Tab(text: 'Past Events'),
-                  Tab(text: 'Badges'),
-                  Tab(text: 'Friends'),
+                  Tab(text: 'Paylaşımlar'),
+                  Tab(text: 'Geçmiş'),
+                  Tab(text: 'Rozetler'),
+                  Tab(text: 'Arkadaşlar'),
                 ],
               ),
               const Divider(height: 1, color: Colors.white10),
@@ -603,9 +674,9 @@ class _TrustScoreCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Trust Score',
+                    const Text('Güven Puanı',
                         style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                    Text('Community standing and reliability.',
+                    Text('Topluluk saygınlığı ve güvenilirlik.',
                         style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11)),
                   ],
                 ),
@@ -614,11 +685,11 @@ class _TrustScoreCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 20),
-          _TrustRow(icon: Icons.access_time_outlined, label: 'Punctuality', delta: '+5', positive: true),
+          _TrustRow(icon: Icons.access_time_outlined, label: 'Dakiklik', delta: '+5', positive: true),
           const SizedBox(height: 12),
-          _TrustRow(icon: Icons.thumb_up_outlined, label: 'Good Sport', delta: '+10', positive: true),
+          _TrustRow(icon: Icons.thumb_up_outlined, label: 'İyi Sporcu', delta: '+10', positive: true),
           const SizedBox(height: 12),
-          _TrustRow(icon: Icons.calendar_month_outlined, label: 'Late Cancellation', delta: '-2', positive: false),
+          _TrustRow(icon: Icons.calendar_month_outlined, label: 'Geç İptal', delta: '-2', positive: false),
         ],
       ),
     );
@@ -783,7 +854,7 @@ class _PostsGrid extends ConsumerWidget {
               children: [
                 Icon(Icons.grid_on_outlined, size: 48, color: Colors.white.withOpacity(0.1)),
                 const SizedBox(height: 12),
-                Text('No posts yet', style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 14)),
+                Text('Henüz paylaşım yok', style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 14)),
               ],
             ),
           );

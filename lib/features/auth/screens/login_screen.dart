@@ -20,7 +20,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _submit() async {
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter email and password')),
+        const SnackBar(content: Text('Lütfen e-posta ve şifrenizi girin')),
       );
       return;
     }
@@ -40,14 +40,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           _emailController.text.trim(),
           _passwordController.text.trim(),
         );
-        // If they already have an account, assume they setup profile and go home
-        // In a real app we'd check if `profiles` exists first.
         if (mounted) context.go('/home');
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Auth Error: $e')),
+          SnackBar(content: Text('Giriş Hatası: $e')),
         );
       }
     } finally {
@@ -83,7 +81,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
               const SizedBox(height: 32),
               Text(
-                _isSignUp ? 'Create\nAccount' : 'Welcome\nBack',
+                _isSignUp ? 'Hesap\nOluştur' : 'Tekrar\nHoşgeldin',
                 style: Theme.of(context).textTheme.displaySmall?.copyWith(
                       fontWeight: FontWeight.w900,
                       letterSpacing: -1.0,
@@ -92,7 +90,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Find partners, build trust, stay active.',
+                'Partner bul, güven inşa et, aktif kal.',
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                       color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                       fontWeight: FontWeight.w500,
@@ -105,7 +103,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 keyboardType: TextInputType.emailAddress,
                 style: const TextStyle(fontWeight: FontWeight.w600),
                 decoration: const InputDecoration(
-                  labelText: 'Email',
+                  labelText: 'E-posta',
                   prefixIcon: Icon(Icons.email_outlined),
                 ),
               ),
@@ -115,7 +113,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 obscureText: true,
                 style: const TextStyle(fontWeight: FontWeight.w600),
                 decoration: const InputDecoration(
-                  labelText: 'Password',
+                  labelText: 'Şifre',
                   prefixIcon: Icon(Icons.lock_outline),
                 ),
               ),
@@ -128,7 +126,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         width: 20,
                         child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2),
                       )
-                    : Text(_isSignUp ? 'SIGN UP' : 'LOGIN', style: const TextStyle(letterSpacing: 1.5)),
+                    : Text(_isSignUp ? 'KAYIT OL' : 'GİRİŞ YAP', style: const TextStyle(letterSpacing: 1.5)),
               ),
               const SizedBox(height: 16),
               TextButton(
@@ -140,7 +138,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 style: TextButton.styleFrom(
                   foregroundColor: Theme.of(context).colorScheme.onSurface,
                 ),
-                child: Text(_isSignUp ? 'Already have an account? Login' : 'Need an account? Sign Up'),
+                child: Text(_isSignUp ? 'Zaten hesabın var mı? Giriş yap' : 'Hesabın yok mu? Kayıt ol'),
               ),
               const SizedBox(height: 32),
               Row(
@@ -148,7 +146,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   Expanded(child: Divider(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2))),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Text('OR', style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5))),
+                    child: Text('VEYA', style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5))),
                   ),
                   Expanded(child: Divider(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2))),
                 ],
@@ -157,7 +155,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ElevatedButton.icon(
                 onPressed: () {}, // Google mock
                 icon: const Icon(Icons.login),
-                label: const Text('Continue with Google'),
+                label: const Text('Google ile devam et'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Theme.of(context).colorScheme.surface,
                   foregroundColor: Theme.of(context).colorScheme.onSurface,
@@ -168,7 +166,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ElevatedButton.icon(
                 onPressed: () {}, // Apple mock
                 icon: const Icon(Icons.apple),
-                label: const Text('Continue with Apple'),
+                label: const Text('Apple ile devam et'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Theme.of(context).colorScheme.surface,
                   foregroundColor: Theme.of(context).colorScheme.onSurface,

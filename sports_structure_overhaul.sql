@@ -120,3 +120,5 @@ $$ LANGUAGE plpgsql;
 
 -- 4. Update events table for new UX requirements
 ALTER TABLE public.events ADD COLUMN IF NOT EXISTS is_indoor BOOLEAN DEFAULT false;
+ALTER TABLE public.events ALTER COLUMN status SET DEFAULT 'open';
+UPDATE public.events SET status = 'open' WHERE status IS NULL;

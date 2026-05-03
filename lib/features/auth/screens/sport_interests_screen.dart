@@ -11,18 +11,18 @@ class SportInterestsScreen extends StatefulWidget {
 
 class _SportInterestsScreenState extends State<SportInterestsScreen> {
   final List<String> sports = [
-    'Tennis', 'Running', 'Basketball', 'Football', 
-    'Cycling', 'Gym', 'Yoga', 'Swimming'
+    'Tenis', 'Koşu', 'Basketbol', 'Futbol', 
+    'Bisiklet', 'Gym', 'Yoga', 'Yüzme'
   ];
   
   final Set<String> selectedSports = {};
-  String selectedLevel = 'Beginner';
+  String selectedLevel = 'Başlangıç';
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Your Sports'),
+        title: const Text('Sporların'),
         elevation: 0,
         backgroundColor: Colors.transparent,
       ),
@@ -32,12 +32,12 @@ class _SportInterestsScreenState extends State<SportInterestsScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'What do you play?',
+              'Neler oynuyorsun?',
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Text(
-              'Select the sports you want to find partners for.',
+              'Partner bulmak istediğin sporları seç.',
               style: TextStyle(color: Colors.grey.shade600),
             ),
             const SizedBox(height: 24),
@@ -88,13 +88,13 @@ class _SportInterestsScreenState extends State<SportInterestsScreen> {
             ),
             if (selectedSports.isNotEmpty) ...[
               const SizedBox(height: 16),
-              const Text('Overall Skill Level', style: TextStyle(fontWeight: FontWeight.bold)),
+              const Text('Genel Yetenek Seviyesi', style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               SegmentedButton<String>(
                 segments: const [
-                  ButtonSegment(value: 'Beginner', label: Text('Beginner')),
-                  ButtonSegment(value: 'Mid', label: Text('Mid')),
-                  ButtonSegment(value: 'Advanced', label: Text('Advanced')),
+                  ButtonSegment(value: 'Başlangıç', label: Text('Başlangıç')),
+                  ButtonSegment(value: 'Orta', label: Text('Orta')),
+                  ButtonSegment(value: 'İleri', label: Text('İleri')),
                 ],
                 selected: {selectedLevel},
                 onSelectionChanged: (Set<String> newSelection) {
@@ -109,7 +109,7 @@ class _SportInterestsScreenState extends State<SportInterestsScreen> {
               onPressed: selectedSports.isEmpty ? null : () {
                 context.go('/home');
               },
-              child: const Text('Complete Setup', style: TextStyle(fontWeight: FontWeight.bold)),
+              child: const Text('Kurulumu Tamamla', style: TextStyle(fontWeight: FontWeight.bold)),
             ),
             const SizedBox(height: 16),
           ],
