@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:matchfit/core/theme.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SportInterestsScreen extends StatefulWidget {
   const SportInterestsScreen({super.key});
@@ -10,13 +11,64 @@ class SportInterestsScreen extends StatefulWidget {
 }
 
 class _SportInterestsScreenState extends State<SportInterestsScreen> {
-  final List<String> sports = [
-    'Tenis', 'Koşu', 'Basketbol', 'Futbol', 
-    'Bisiklet', 'Gym', 'Yoga', 'Yüzme'
-  ];
+  final SupabaseClient _supabase = Supabase.instance.client;
+  List<Map<String, dynamic>> _allSports = [];
+  bool _isLoading = true;
+  bool _isSaving = false;
   
-  final Set<String> selectedSports = {};
-  String selectedLevel = 'Başlangıç';
+  final Set<String> selectedSportIds = {};
+  String selectedLevel = 'beginner'; // beginner, intermediate, advanced
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchSports();
+  }
+
+  Future<void> _fetchSports() async {
+    try {
+      final response = await _supabase.from('sports').select('id, name');
+      setState(() {
+        _allSports = List<Map<String, dynamic>>.from(response);
+        // İsteğe bağlı olarak popüler sporları üste alabilir veya alfabetik dizebiliriz
+        _allSports.sort((a, b) => (a['name'] as String).compareTo(b['name'] as String));
+        _isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Error fetching sports: $e');
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _saveInterests() async {
+    if (selectedSportIds.isEmpty) return;
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) return;
+
+    setState(() => _isSaving = true);
+    try {
+      final inserts = selectedSportIds.map((id) => {
+        'user_id': userId,
+        'sport_id': id,
+        'skill_level': selectedLevel,
+      }).toList();
+
+      await _supabase.from('user_sports_preferences').upsert(inserts);
+      
+      if (mounted) {
+        context.go('/home');
+      }
+    } catch (e) {
+      debugPrint('Error saving interests: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Hata oluştu: $e')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -42,59 +94,64 @@ class _SportInterestsScreenState extends State<SportInterestsScreen> {
             ),
             const SizedBox(height: 24),
             Expanded(
-              child: GridView.builder(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 16,
-                  childAspectRatio: 2.5,
-                ),
-                itemCount: sports.length,
-                itemBuilder: (context, index) {
-                  final sport = sports[index];
-                  final isSelected = selectedSports.contains(sport);
-                  return InkWell(
-                    onTap: () {
-                      setState(() {
-                        if (isSelected) {
-                          selectedSports.remove(sport);
-                        } else {
-                          selectedSports.add(sport);
-                        }
-                      });
-                    },
-                    borderRadius: BorderRadius.circular(12),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: isSelected ? MatchFitTheme.primaryBlue.withOpacity(0.1) : Theme.of(context).colorScheme.surface,
-                        border: Border.all(
-                          color: isSelected ? MatchFitTheme.primaryBlue : Colors.grey.shade300,
-                          width: 2,
-                        ),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        sport,
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: isSelected ? MatchFitTheme.primaryBlue : Colors.grey.shade700,
-                        ),
-                      ),
+              child: _isLoading 
+                ? const Center(child: CircularProgressIndicator())
+                : GridView.builder(
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 16,
+                      mainAxisSpacing: 16,
+                      childAspectRatio: 2.5,
                     ),
-                  );
-                },
-              ),
+                    itemCount: _allSports.length,
+                    itemBuilder: (context, index) {
+                      final sport = _allSports[index];
+                      final id = sport['id'] as String;
+                      final name = sport['name'] as String;
+                      final isSelected = selectedSportIds.contains(id);
+                      
+                      return InkWell(
+                        onTap: () {
+                          setState(() {
+                            if (isSelected) {
+                              selectedSportIds.remove(id);
+                            } else {
+                              selectedSportIds.add(id);
+                            }
+                          });
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: isSelected ? MatchFitTheme.primaryBlue.withOpacity(0.1) : Theme.of(context).colorScheme.surface,
+                            border: Border.all(
+                              color: isSelected ? MatchFitTheme.primaryBlue : Colors.grey.shade300,
+                              width: 2,
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            name,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: isSelected ? MatchFitTheme.primaryBlue : Colors.grey.shade700,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
             ),
-            if (selectedSports.isNotEmpty) ...[
+            if (selectedSportIds.isNotEmpty) ...[
               const SizedBox(height: 16),
               const Text('Genel Yetenek Seviyesi', style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               SegmentedButton<String>(
                 segments: const [
-                  ButtonSegment(value: 'Başlangıç', label: Text('Başlangıç')),
-                  ButtonSegment(value: 'Orta', label: Text('Orta')),
-                  ButtonSegment(value: 'İleri', label: Text('İleri')),
+                  ButtonSegment(value: 'beginner', label: Text('Başlangıç')),
+                  ButtonSegment(value: 'intermediate', label: Text('Orta')),
+                  ButtonSegment(value: 'advanced', label: Text('İleri')),
                 ],
                 selected: {selectedLevel},
                 onSelectionChanged: (Set<String> newSelection) {
@@ -106,10 +163,10 @@ class _SportInterestsScreenState extends State<SportInterestsScreen> {
             ],
             const SizedBox(height: 24),
             ElevatedButton(
-              onPressed: selectedSports.isEmpty ? null : () {
-                context.go('/home');
-              },
-              child: const Text('Kurulumu Tamamla', style: TextStyle(fontWeight: FontWeight.bold)),
+              onPressed: selectedSportIds.isEmpty || _isSaving ? null : _saveInterests,
+              child: _isSaving 
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Text('Kurulumu Tamamla', style: TextStyle(fontWeight: FontWeight.bold)),
             ),
             const SizedBox(height: 16),
           ],

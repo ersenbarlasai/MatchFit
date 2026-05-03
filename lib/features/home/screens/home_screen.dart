@@ -191,7 +191,7 @@ class HomeScreen extends ConsumerWidget {
                _buildNearbyEventsSection(context, ref),
                const SizedBox(height: 32),
                _buildSectionTitle('Sana Uygun Kişiler'),
-               _buildPeopleForYou(context),
+               _buildPeopleForYou(context, ref),
                const SizedBox(height: 32),
                _buildWeeklyGoal(context),
                const SizedBox(height: 32),
@@ -209,8 +209,7 @@ class HomeScreen extends ConsumerWidget {
                const SizedBox(height: 32),
                _buildSponsoredAd(context),
                const SizedBox(height: 32),
-               _buildSectionTitle('Bursa\'da Yükselen Branşlar'),
-               _buildTrendingSports(context),
+               _buildTrendingSports(context, ref),
                const SizedBox(height: 32),
                _buildSectionTitle('Aktiviteler'),
                _buildActivities(context),
@@ -496,30 +495,78 @@ class HomeScreen extends ConsumerWidget {
             if (events.isEmpty) {
               return Container(
                 margin: const EdgeInsets.symmetric(horizontal: 16),
-                padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1E1E1E),
                   borderRadius: BorderRadius.circular(24),
-                ),
-                child: Center(
-                  child: Column(
-                    children: [
-                      Icon(Icons.event_busy, size: 48, color: Colors.white.withOpacity(0.2)),
-                      const SizedBox(height: 16),
-                      const Text('Yakınında etkinlik bulunamadı.', style: TextStyle(color: Colors.white70, fontSize: 14)),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: () => context.push('/create-event'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: MatchFitTheme.accentGreen,
-                          foregroundColor: Colors.black,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        child: const Text('İlk Etkinliği Sen Oluştur', style: TextStyle(fontWeight: FontWeight.bold)),
-                      )
-                    ]
+                  gradient: const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0xFF1E2429), Color(0xFF0F141A)],
                   ),
                 ),
+                child: Column(
+                  children: [
+                    // Image placeholder (Stadium lights)
+                    Container(
+                      height: 200,
+                      decoration: const BoxDecoration(
+                        borderRadius: BorderRadius.only(topLeft: Radius.circular(24), topRight: Radius.circular(24)),
+                        image: DecorationImage(
+                          image: NetworkImage('https://images.unsplash.com/photo-1577223625816-7546f13df25d?q=80&w=600'),
+                          fit: BoxFit.cover,
+                          colorFilter: ColorFilter.mode(Colors.black54, BlendMode.darken),
+                        ),
+                      ),
+                      child: Stack(
+                        children: [
+                          Positioned(
+                            bottom: 16,
+                            left: 16,
+                            child: Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: MatchFitTheme.accentGreen.withOpacity(0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.sports_basketball, color: MatchFitTheme.accentGreen, size: 36),
+                            ),
+                          )
+                        ]
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        children: [
+                          const Text('Yakınında henüz\nhareket yok.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900, height: 1.2)),
+                          const SizedBox(height: 16),
+                          const Text('Ama bu harika bir fırsat! Bölgedeki ilk etkinliği sen başlat ve topluluğu harekete geçir.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.5)),
+                          const SizedBox(height: 24),
+                          ElevatedButton.icon(
+                            onPressed: () => context.push('/create-event'),
+                            icon: const Icon(Icons.add_circle_outline, color: Colors.black, size: 20),
+                            label: const Text('ETKİNLİK OLUŞTUR', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: MatchFitTheme.accentGreen,
+                              minimumSize: const Size(double.infinity, 54),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          OutlinedButton.icon(
+                            onPressed: () => context.push('/explore'),
+                            icon: const Icon(Icons.explore_outlined, color: Colors.white, size: 20),
+                            label: const Text('BAŞKA BÖLGELERİ KEŞFET', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide(color: Colors.blue.withOpacity(0.5), width: 2),
+                              minimumSize: const Size(double.infinity, 54),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            ),
+                          ),
+                        ]
+                      )
+                    )
+                  ]
+                )
               );
             }
 
@@ -637,17 +684,92 @@ class HomeScreen extends ConsumerWidget {
     return '🏅';
   }
 
-  Widget _buildPeopleForYou(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children: [
-          _buildPersonCard('Mert', '1.5 km • 85 Güven Puanı', ['🎾 Tenis', '🏃 Koşu'], 'https://i.pravatar.cc/150?img=11'),
-          const SizedBox(width: 16),
-          _buildPersonCard('Elif', '5.8 km • 98 Güven Puanı', ['🧘‍♀️ Yoga', '🏋️‍♀️ Fitness'], 'https://i.pravatar.cc/150?img=5'),
-        ]
-      )
+  Widget _buildPeopleForYou(BuildContext context, WidgetRef ref) {
+    final suggestionsAsync = ref.watch(suggestedMembersProvider);
+    
+    return suggestionsAsync.when(
+      data: (users) {
+        if (users.isEmpty) {
+          // WhatsApp Davet Empty State
+          return Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF1E2429), Color(0xFF0F141A)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: const Color(0xFF25D366).withOpacity(0.3), width: 1.5),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF25D366).withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.people_alt_outlined, color: Color(0xFF25D366), size: 40),
+                ),
+                const SizedBox(height: 16),
+                const Text('Bölgende Eşleşme Yok', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                const Text(
+                  '25km çevrende seninle aynı sporlarla ilgilenen kimseyi bulamadık. Çevreni davet et ve topluluğu sen büyüt!', 
+                  textAlign: TextAlign.center, 
+                  style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.5)
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  onPressed: () { 
+                    // WhatsApp davet tetikleyicisi
+                  },
+                  icon: const Icon(Icons.share, color: Colors.black, size: 20),
+                  label: const Text('WhatsApp ile Davet Et', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 14)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF25D366), // WhatsApp Yeşili
+                    minimumSize: const Size(double.infinity, 54),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  )
+                )
+              ]
+            )
+          );
+        }
+
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: users.map((user) {
+              final name = user['full_name'] as String? ?? 'Kullanıcı';
+              final avatar = user['avatar_url'] as String? ?? 'https://i.pravatar.cc/150?u=${user['id']}';
+              final score = user['trust_score']?.toString() ?? '50';
+              final distanceNum = (user['distance'] as num?)?.toDouble() ?? 0.0;
+              final distanceStr = distanceNum > 0 ? '${(distanceNum / 1000).toStringAsFixed(1)} km' : '? km';
+              
+              List<String> tags = [];
+              if (user['shared_sports'] != null && user['shared_sports'] is List) {
+                tags = (user['shared_sports'] as List).map((e) => '${_getSportEmoji(e.toString())} ${e.toString()}').toList();
+              }
+              if (tags.isEmpty) tags = ['🏅 Sporcu'];
+
+              return Padding(
+                padding: const EdgeInsets.only(right: 16),
+                child: SizedBox(
+                  width: 200,
+                  child: _buildPersonCard(name, '$distanceStr • $score Güven Puanı', tags.take(2).toList(), avatar)
+                )
+              );
+            }).toList(),
+          )
+        );
+      },
+      loading: () => const Padding(padding: EdgeInsets.all(32), child: Center(child: CircularProgressIndicator(color: MatchFitTheme.accentGreen))),
+      error: (_, __) => const SizedBox(),
     );
   }
 
@@ -874,24 +996,99 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildTrendingSports(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E1E1E),
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Column(
-        children: [
-          _buildTrendingItem('1', '🎾 Padel', true),
-          const Divider(color: Colors.white12, height: 24),
-          _buildTrendingItem('2', '🏃 Koşu', true),
-          const Divider(color: Colors.white12, height: 24),
-          _buildTrendingItem('3', '🏀 Basketbol', false),
-        ]
-      )
+  Widget _buildTrendingSports(BuildContext context, WidgetRef ref) {
+    final locationNameAsync = ref.watch(locationNameProvider);
+    final eventsAsync = ref.watch(eventsProvider);
+
+    String city = 'Bulunduğun Bölge';
+    if (locationNameAsync.hasValue && locationNameAsync.value != null) {
+      final locValue = locationNameAsync.value!;
+      if (locValue != 'Mevcut Konum') {
+        final parts = locValue.split(',');
+        city = parts[0].trim();
+      }
+    }
+    
+    final suffix = _getLocativeSuffix(city);
+    final title = city == 'Bulunduğun Bölge' ? "Bölgede Yükselen Branşlar" : "$city'$suffix Yükselen Branşlar";
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionTitle(title),
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E1E1E),
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: eventsAsync.when(
+            data: (events) {
+              if (events.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8.0),
+                  child: Center(child: Text('Henüz yeterli veri yok.', style: TextStyle(color: Colors.white54))),
+                );
+              }
+              
+              final Map<String, int> sportCounts = {};
+              for (final e in events) {
+                final sport = e['sports']?['name'] as String? ?? 'Diğer';
+                sportCounts[sport] = (sportCounts[sport] ?? 0) + 1;
+              }
+              
+              final sortedSports = sportCounts.entries.toList()
+                ..sort((a, b) => b.value.compareTo(a.value));
+                
+              final top3 = sortedSports.take(3).toList();
+              
+              return Column(
+                children: List.generate(top3.length, (index) {
+                  final entry = top3[index];
+                  final isUp = index < 2; // İlk iki yükselişte varsayımı
+                  return Column(
+                    children: [
+                      _buildTrendingItem((index + 1).toString(), '${_getSportEmoji(entry.key)} ${entry.key}', isUp),
+                      if (index < top3.length - 1)
+                        const Divider(color: Colors.white12, height: 24),
+                    ],
+                  );
+                }),
+              );
+            },
+            loading: () => const Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator(color: MatchFitTheme.accentGreen))),
+            error: (_, __) => const SizedBox(),
+          )
+        )
+      ]
     );
+  }
+
+  String _getLocativeSuffix(String city) {
+    if (city.isEmpty) return 'da';
+    final lower = city.toLowerCase();
+    final lastChar = lower[lower.length - 1];
+    final hardConsonants = ['p', 'ç', 't', 'k', 'f', 'h', 's', 'ş'];
+    final isHard = hardConsonants.contains(lastChar);
+    
+    // Find last vowel
+    final vowels = ['a', 'e', 'ı', 'i', 'o', 'ö', 'u', 'ü'];
+    String lastVowel = 'a';
+    for (int i = lower.length - 1; i >= 0; i--) {
+      if (vowels.contains(lower[i])) {
+        lastVowel = lower[i];
+        break;
+      }
+    }
+    
+    final isFront = ['e', 'i', 'ö', 'ü'].contains(lastVowel);
+    
+    if (isHard) {
+      return isFront ? 'te' : 'ta';
+    } else {
+      return isFront ? 'de' : 'da';
+    }
   }
 
   Widget _buildTrendingItem(String rank, String title, bool isUp) {
