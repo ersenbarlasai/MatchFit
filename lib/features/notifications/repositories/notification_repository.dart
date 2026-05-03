@@ -37,6 +37,23 @@ class NotificationRepository {
         .eq('is_read', false);
   }
 
+  Future<void> deleteNotification(String notificationId) async {
+    await _supabase
+        .from('notifications')
+        .delete()
+        .eq('id', notificationId);
+  }
+
+  Future<void> deleteAllNotifications() async {
+    final user = _supabase.auth.currentUser;
+    if (user == null) return;
+
+    await _supabase
+        .from('notifications')
+        .delete()
+        .eq('receiver_id', user.id);
+  }
+
   Stream<List<Map<String, dynamic>>> watchNotifications() {
     final user = _supabase.auth.currentUser;
     if (user == null) return Stream.value([]);

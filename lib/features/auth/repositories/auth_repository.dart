@@ -30,6 +30,14 @@ class AuthRepository {
     await _supabase.auth.signOut();
   }
 
+  Future<void> resetPassword(String email) async {
+    await _supabase.auth.resetPasswordForEmail(email);
+  }
+
+  Future<void> updatePassword(String newPassword) async {
+    await _supabase.auth.updateUser(UserAttributes(password: newPassword));
+  }
+
   Future<void> upsertProfile(Map<String, dynamic> profileData) async {
     final user = currentUser;
     if (user == null) throw Exception('No authenticated user found');

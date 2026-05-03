@@ -1,6 +1,9 @@
 import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
 import '../features/auth/screens/login_screen.dart';
+import '../features/auth/screens/signup_screen.dart';
+import '../features/auth/screens/reset_password_screen.dart';
+import '../features/auth/screens/update_password_screen.dart';
 import '../features/auth/screens/profile_setup_screen.dart';
 import '../features/onboarding/screens/sports_selection_screen.dart';
 import '../features/home/screens/home_screen.dart';
@@ -21,6 +24,9 @@ final GoRouter appRouter = GoRouter(
     // ── Auth & Splash (no shell) ──
     GoRoute(path: '/', builder: (context, state) => const SplashScreen()),
     GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
+    GoRoute(path: '/signup', builder: (context, state) => const SignupScreen()),
+    GoRoute(path: '/reset-password', builder: (context, state) => const ResetPasswordScreen()),
+    GoRoute(path: '/update-password', builder: (context, state) => const UpdatePasswordScreen()),
     GoRoute(path: '/profile-setup', builder: (context, state) => const ProfileSetupScreen()),
     GoRoute(path: '/sport-interests', builder: (context, state) => const SportsSelectionScreen()),
 

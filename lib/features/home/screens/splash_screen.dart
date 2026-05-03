@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -11,15 +12,37 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
+  StreamSubscription<AuthState>? _authStateSubscription;
+
   @override
   void initState() {
     super.initState();
+    _setupAuthListener();
     _checkAuth();
+  }
+
+  void _setupAuthListener() {
+    _authStateSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+      final AuthChangeEvent event = data.event;
+      if (event == AuthChangeEvent.passwordRecovery) {
+        if (mounted) context.go('/update-password');
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _authStateSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _checkAuth() async {
     await Future.delayed(const Duration(seconds: 2));
     if (!mounted) return;
+    
+    // Don't redirect if we already caught a passwordRecovery event
+    final currentRoute = GoRouterState.of(context).uri.toString();
+    if (currentRoute == '/update-password') return;
 
     final session = Supabase.instance.client.auth.currentSession;
     if (session != null) {

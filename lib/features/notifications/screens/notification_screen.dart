@@ -14,64 +14,104 @@ class NotificationScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final notificationsAsync = ref.watch(notificationsProvider);
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF121212),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
-          onPressed: () => context.pop(),
-        ),
-        title: const Text('Notifications',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
-        actions: [
-          TextButton(
-            onPressed: () => ref.read(notificationRepositoryProvider).markAllAsRead(),
-            child: const Text('Mark all as read',
-                style: TextStyle(color: MatchFitTheme.accentGreen, fontSize: 13, fontWeight: FontWeight.bold)),
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        backgroundColor: const Color(0xFF121212),
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
+            onPressed: () => context.pop(),
           ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: notificationsAsync.when(
-        data: (notifications) {
-          if (notifications.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.notifications_none_outlined, size: 64, color: Colors.white.withOpacity(0.1)),
-                  const SizedBox(height: 16),
-                  Text('All caught up!',
-                      style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 16, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  Text('No new notifications for now.',
-                      style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 13)),
-                ],
-              ),
-            );
-          }
+          title: const Text('Notifications',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
+          actions: [
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert, color: Colors.white),
+              color: const Color(0xFF1E1E1E),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              onSelected: (value) {
+                if (value == 'mark_all_read') {
+                  ref.read(notificationRepositoryProvider).markAllAsRead();
+                } else if (value == 'delete_all') {
+                  ref.read(notificationRepositoryProvider).deleteAllNotifications();
+                }
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'mark_all_read',
+                  child: Text('Tümünü okundu işaretle', style: TextStyle(color: Colors.white)),
+                ),
+                const PopupMenuItem(
+                  value: 'delete_all',
+                  child: Text('Tümünü sil', style: TextStyle(color: Colors.redAccent)),
+                ),
+              ],
+            ),
+          ],
+          bottom: const TabBar(
+            indicatorColor: MatchFitTheme.accentGreen,
+            labelColor: MatchFitTheme.accentGreen,
+            unselectedLabelColor: Colors.white54,
+            tabs: [
+              Tab(text: 'Okunmamış'),
+              Tab(text: 'Okunmuş'),
+            ],
+          ),
+        ),
+        body: notificationsAsync.when(
+          data: (notifications) {
+            final unread = notifications.where((n) => n['is_read'] != true).toList();
+            final read = notifications.where((n) => n['is_read'] == true).toList();
 
-          return ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            itemCount: notifications.length,
-            itemBuilder: (context, index) {
-              final notification = notifications[index];
-              return _NotificationItem(notification: notification);
-            },
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator(color: MatchFitTheme.accentGreen)),
-        error: (e, _) => Center(child: Text('Error: $e', style: const TextStyle(color: Colors.red))),
+            return TabBarView(
+              children: [
+                _buildList(unread, 'Harika!', 'Okunmamış bildiriminiz yok.'),
+                _buildList(read, 'Bildirim yok', ''),
+              ],
+            );
+          },
+          loading: () => const Center(child: CircularProgressIndicator(color: MatchFitTheme.accentGreen)),
+          error: (e, _) => Center(child: Text('Error: $e', style: const TextStyle(color: Colors.red))),
+        ),
       ),
+    );
+  }
+
+  Widget _buildList(List<Map<String, dynamic>> items, String emptyTitle, String emptySub) {
+    if (items.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.notifications_none_outlined, size: 64, color: Colors.white.withOpacity(0.1)),
+            const SizedBox(height: 16),
+            Text(emptyTitle,
+                style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Text(emptySub,
+                style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 13)),
+          ],
+        ),
+      );
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      itemCount: items.length,
+      itemBuilder: (context, index) {
+        final notification = items[index];
+        return _NotificationItem(key: ValueKey(notification['id']), notification: notification);
+      },
     );
   }
 }
 
+
 class _NotificationItem extends ConsumerStatefulWidget {
   final Map<String, dynamic> notification;
-  const _NotificationItem({required this.notification});
+  const _NotificationItem({super.key, required this.notification});
 
   @override
   ConsumerState<_NotificationItem> createState() => _NotificationItemState();
@@ -103,16 +143,32 @@ class _NotificationItemState extends ConsumerState<_NotificationItem> {
     final showButtons = type == 'follow_request' && hasPendingRequest && !_isHandled;
     final isEffectivelyRead = isRead || _isHandled || (type == 'follow_request' && !hasPendingRequest && !_isHandled);
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: isEffectivelyRead ? Colors.white.withOpacity(0.03) : Colors.white.withOpacity(0.07),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isEffectivelyRead ? Colors.white.withOpacity(0.05) : MatchFitTheme.accentGreen.withOpacity(0.2),
+    return Dismissible(
+      key: Key(widget.notification['id'].toString()),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: Colors.redAccent.withOpacity(0.8),
+          borderRadius: BorderRadius.circular(20),
         ),
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 24),
+        child: const Icon(Icons.delete_outline, color: Colors.white, size: 28),
       ),
-      child: Column(
+      onDismissed: (_) {
+        ref.read(notificationRepositoryProvider).deleteNotification(widget.notification['id']);
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: isEffectivelyRead ? Colors.white.withOpacity(0.03) : Colors.white.withOpacity(0.07),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isEffectivelyRead ? Colors.white.withOpacity(0.05) : MatchFitTheme.accentGreen.withOpacity(0.2),
+          ),
+        ),
+        child: Column(
         children: [
           ListTile(
             onTap: () {
@@ -226,6 +282,7 @@ class _NotificationItemState extends ConsumerState<_NotificationItem> {
               ),
             ),
         ],
+      ),
       ),
     );
   }
