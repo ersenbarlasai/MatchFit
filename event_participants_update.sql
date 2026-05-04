@@ -1,0 +1,3 @@
+ALTER TABLE event_participants
+ADD COLUMN IF NOT EXISTS rejection_count INTEGER DEFAULT 0,
+ADD COLUMN IF NOT EXISTS last_rejected_at TIMESTAMPTZ;

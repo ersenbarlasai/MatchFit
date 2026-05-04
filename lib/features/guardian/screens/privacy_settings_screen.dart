@@ -4,8 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:matchfit/core/theme.dart';
 import '../../guardian/repositories/guardian_repository.dart';
 import '../../auth/repositories/auth_repository.dart';
-import 'package:matchfit/core/l10n/app_localizations.dart';
-import 'package:matchfit/core/providers/locale_provider.dart';
 
 // State management for privacy settings
 class PrivacySettingsState {
@@ -66,7 +64,7 @@ class PrivacySettingsNotifier extends Notifier<PrivacySettingsState> {
     state = state.copyWith(
       isPrivateAccount: value,
       profileVisibility: value ? 'private' : 'public',
-      isSaved: false
+      isSaved: false,
     );
   }
 
@@ -89,7 +87,8 @@ class PrivacySettingsNotifier extends Notifier<PrivacySettingsState> {
 
 final privacySettingsProvider =
     NotifierProvider<PrivacySettingsNotifier, PrivacySettingsState>(
-        PrivacySettingsNotifier.new);
+      PrivacySettingsNotifier.new,
+    );
 
 class PrivacySettingsScreen extends ConsumerStatefulWidget {
   const PrivacySettingsScreen({super.key});
@@ -117,20 +116,34 @@ class _PrivacySettingsScreenState extends ConsumerState<PrivacySettingsScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
+          icon: const Icon(
+            Icons.arrow_back_ios_new,
+            color: Colors.white,
+            size: 20,
+          ),
           onPressed: () => context.pop(),
         ),
-        title: const Text('Ayarlar ve Gizlilik',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+        title: const Text(
+          'Ayarlar ve Gizlilik',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
+        ),
         centerTitle: false,
       ),
       body: settings.isLoading
-          ? const Center(child: CircularProgressIndicator(color: MatchFitTheme.accentGreen))
+          ? const Center(
+              child: CircularProgressIndicator(
+                color: MatchFitTheme.accentGreen,
+              ),
+            )
           : ListView(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               children: [
                 const SizedBox(height: 20),
-                
+
                 // --- SECTION: ACCOUNT ---
                 _SectionHeader(title: 'Hesap'),
                 _SettingsGroup(
@@ -138,7 +151,7 @@ class _PrivacySettingsScreenState extends ConsumerState<PrivacySettingsScreen> {
                     _SettingsTile(
                       icon: Icons.person_outline,
                       title: 'Profili Düzenle',
-                      onTap: () {},
+                      onTap: () => context.push('/edit-profile'),
                     ),
                     _SettingsTile(
                       icon: Icons.notifications_none_rounded,
@@ -162,8 +175,8 @@ class _PrivacySettingsScreenState extends ConsumerState<PrivacySettingsScreen> {
                     _SettingsTile(
                       icon: Icons.location_searching_rounded,
                       title: 'Konum Gizliliği',
-                      subtitle: settings.hideLocationRadius > 0 
-                          ? '${settings.hideLocationRadius}m Gizleme Aktif' 
+                      subtitle: settings.hideLocationRadius > 0
+                          ? '${settings.hideLocationRadius}m Gizleme Aktif'
                           : 'Tam Konum Açık',
                       onTap: () {},
                     ),
@@ -215,10 +228,10 @@ class _PrivacySettingsScreenState extends ConsumerState<PrivacySettingsScreen> {
                 ),
 
                 const SizedBox(height: 32),
-                
+
                 // Logout Button
                 _LogoutButton(onTap: () => _handleLogout(context, ref)),
-                
+
                 const SizedBox(height: 40),
               ],
             ),
@@ -231,7 +244,10 @@ class _PrivacySettingsScreenState extends ConsumerState<PrivacySettingsScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E1E),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Çıkış Yap', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text(
+          'Çıkış Yap',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
         content: Text(
           'Hesabınızdan çıkış yapmak istediğinize emin misiniz?',
           style: TextStyle(color: Colors.white.withOpacity(0.7), height: 1.5),
@@ -239,16 +255,24 @@ class _PrivacySettingsScreenState extends ConsumerState<PrivacySettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('İptal', style: TextStyle(color: Colors.white.withOpacity(0.5))),
+            child: Text(
+              'İptal',
+              style: TextStyle(color: Colors.white.withOpacity(0.5)),
+            ),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFFF4B4B),
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
-            child: const Text('Çıkış Yap', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text(
+              'Çıkış Yap',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
@@ -273,7 +297,11 @@ class _SectionHeader extends StatelessWidget {
       padding: const EdgeInsets.only(left: 4, bottom: 12, top: 12),
       child: Text(
         title,
-        style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+        ),
       ),
     );
   }
@@ -298,7 +326,12 @@ class _SettingsGroup extends StatelessWidget {
           return Column(
             children: [
               entry.value,
-              if (!isLast) Divider(color: Colors.white.withOpacity(0.05), height: 1, indent: 56),
+              if (!isLast)
+                Divider(
+                  color: Colors.white.withOpacity(0.05),
+                  height: 1,
+                  indent: 56,
+                ),
             ],
           );
         }).toList(),
@@ -325,11 +358,28 @@ class _SettingsTile extends StatelessWidget {
     return ListTile(
       onTap: onTap,
       leading: Icon(icon, color: Colors.white70, size: 22),
-      title: Text(title, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500)),
-      subtitle: subtitle != null 
-          ? Text(subtitle!, style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 12)) 
+      title: Text(
+        title,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 15,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      subtitle: subtitle != null
+          ? Text(
+              subtitle!,
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.3),
+                fontSize: 12,
+              ),
+            )
           : null,
-      trailing: const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white24, size: 14),
+      trailing: const Icon(
+        Icons.arrow_forward_ios_rounded,
+        color: Colors.white24,
+        size: 14,
+      ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
     );
   }
@@ -354,8 +404,18 @@ class _SettingsSwitchTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListTile(
       leading: Icon(icon, color: Colors.white70, size: 22),
-      title: Text(title, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500)),
-      subtitle: Text(subtitle, style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 12)),
+      title: Text(
+        title,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 15,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 12),
+      ),
       trailing: Switch(
         value: value,
         onChanged: onChanged,
@@ -388,7 +448,14 @@ class _LogoutButton extends StatelessWidget {
           children: [
             Icon(Icons.logout_rounded, color: Color(0xFFFF4B4B), size: 20),
             SizedBox(width: 12),
-            Text('Çıkış Yap', style: TextStyle(color: Color(0xFFFF4B4B), fontWeight: FontWeight.bold, fontSize: 16)),
+            Text(
+              'Çıkış Yap',
+              style: TextStyle(
+                color: Color(0xFFFF4B4B),
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
           ],
         ),
       ),

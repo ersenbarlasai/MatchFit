@@ -28,11 +28,11 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   final _titleController = TextEditingController();
   final _venueController = TextEditingController();
   final _descriptionController = TextEditingController();
-  
+
   String selectedCountry = 'Türkiye';
   String? selectedProvince;
   String? selectedDistrict;
-  
+
   String? selectedCategory;
   String? selectedSport;
   String requiredLevel = 'Başlangıç';
@@ -49,14 +49,28 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   double? _selectedLat;
   double? _selectedLng;
 
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _titleController.dispose();
+    _venueController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
   void _onLocationChanged(String value) {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
     _debounce = Timer(const Duration(milliseconds: 500), () async {
       if (value.length > 2) {
-        final contextStr = '${selectedDistrict ?? ''} ${selectedProvince ?? ''} $selectedCountry';
-        final results = await _searchService.search('$value $contextStr'.trim());
+        final contextStr =
+            '${selectedDistrict ?? ''} ${selectedProvince ?? ''} $selectedCountry';
+        final results = await _searchService.search(
+          '$value $contextStr'.trim(),
+        );
+        if (!mounted) return;
         setState(() => _suggestions = results);
       } else {
+        if (!mounted) return;
         setState(() => _suggestions = []);
       }
     });
@@ -65,13 +79,27 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   void _nextStep() {
     if (_currentStep == 1) {
       if (selectedCategory == null || selectedSport == null) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context).pleaseSelectCategoryAndSport)));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(context).pleaseSelectCategoryAndSport,
+            ),
+          ),
+        );
         return;
       }
       setState(() => _currentStep = 2);
     } else if (_currentStep == 2) {
-      if (selectedDate == null || selectedTime == null || _titleController.text.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context).pleaseEnterDateTimeTitle)));
+      if (selectedDate == null ||
+          selectedTime == null ||
+          _titleController.text.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(context).pleaseEnterDateTimeTitle,
+            ),
+          ),
+        );
         return;
       }
       setState(() => _currentStep = 3);
@@ -80,7 +108,11 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
 
   Future<void> _publishEvent() async {
     if (selectedProvince == null || selectedDistrict == null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context).pleaseCompleteLocation)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context).pleaseCompleteLocation),
+        ),
+      );
       return;
     }
 
@@ -88,7 +120,8 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
     try {
       final authRepo = ref.read(authRepositoryProvider);
       final currentUser = authRepo.currentUser;
-      if (currentUser == null) throw Exception('You must be logged in to create an event');
+      if (currentUser == null)
+        throw Exception('You must be logged in to create an event');
 
       final refereeRepo = ref.read(refereeRepositoryProvider);
       final isRestricted = await refereeRepo.isUserRestricted(currentUser.id);
@@ -101,18 +134,24 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
           .select('id')
           .ilike('name', selectedSport!)
           .maybeSingle();
-          
+
       if (sportResponse == null) {
-        throw Exception('"$selectedSport" branşı veritabanında bulunamadı. Lütfen SQL scriptini çalıştırın.');
+        throw Exception(
+          '"$selectedSport" branşı veritabanında bulunamadı. Lütfen SQL scriptini çalıştırın.',
+        );
       }
 
       final eventDate = DateTime(
-        selectedDate!.year, selectedDate!.month, selectedDate!.day,
+        selectedDate!.year,
+        selectedDate!.month,
+        selectedDate!.day,
       );
-      
-      final formattedTime = '${selectedTime!.hour.toString().padLeft(2, '0')}:${selectedTime!.minute.toString().padLeft(2, '0')}:00';
 
-      final fullLocationName = '$selectedDistrict, $selectedProvince, $selectedCountry${_venueController.text.isNotEmpty ? ' - ${_venueController.text}' : ''}';
+      final formattedTime =
+          '${selectedTime!.hour.toString().padLeft(2, '0')}:${selectedTime!.minute.toString().padLeft(2, '0')}:00';
+
+      final fullLocationName =
+          '$selectedDistrict, $selectedProvince, $selectedCountry${_venueController.text.isNotEmpty ? ' - ${_venueController.text}' : ''}';
 
       final eventData = {
         'title': _titleController.text,
@@ -131,12 +170,12 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
       };
 
       await ref.read(eventRepositoryProvider).createEvent(eventData);
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(AppLocalizations.of(context).eventPublished)),
         );
-        context.pop();
+        context.go('/home');
       }
     } catch (e) {
       if (mounted) {
@@ -152,7 +191,6 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   @override
   Widget build(BuildContext context) {
     final profileAsync = ref.watch(currentUserProfileProvider);
-    final t = AppLocalizations.of(context);
 
     return Scaffold(
       backgroundColor: const Color(0xFF0A0A0A),
@@ -194,8 +232,14 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                 radius: 16,
                 editable: false,
               ),
-              loading: () => const CircleAvatar(radius: 16, backgroundColor: Color(0xFF1E1E1E)),
-              error: (_, __) => const CircleAvatar(radius: 16, backgroundColor: Color(0xFF1E1E1E)),
+              loading: () => const CircleAvatar(
+                radius: 16,
+                backgroundColor: Color(0xFF1E1E1E),
+              ),
+              error: (_, __) => const CircleAvatar(
+                radius: 16,
+                backgroundColor: Color(0xFF1E1E1E),
+              ),
             ),
           ],
         ),
@@ -218,11 +262,11 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                 ],
               ),
               const SizedBox(height: 32),
-              
+
               if (_currentStep == 1) _buildStep1(),
               if (_currentStep == 2) _buildStep2(),
               if (_currentStep == 3) _buildStep3(),
-              
+
               const SizedBox(height: 120),
             ],
           ),
@@ -248,7 +292,11 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
       children: [
         const Text(
           'Etkinlik Oluştur',
-          style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 32,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         const SizedBox(height: 8),
         Text(
@@ -256,7 +304,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
           style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 16),
         ),
         const SizedBox(height: 32),
-        
+
         _buildLabel(t.selectCategory),
         _buildCustomDropdown(
           value: selectedCategory,
@@ -268,18 +316,20 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
           }),
         ),
         const SizedBox(height: 24),
-        
+
         _buildLabel(t.selectSubBranch),
         _buildCustomDropdown(
           value: selectedSport,
           hint: t.selectSubBranch,
-          items: selectedCategory != null 
-            ? sportsData.firstWhere((c) => c.name == selectedCategory).subcategories 
-            : [],
+          items: selectedCategory != null
+              ? sportsData
+                    .firstWhere((c) => c.name == selectedCategory)
+                    .subcategories
+              : [],
           onChanged: (val) => setState(() => selectedSport = val),
         ),
         const SizedBox(height: 24),
-        
+
         _buildLabel(t.level),
         _buildSegmentedControl(
           options: [t.beginner, t.intermediate, t.advanced],
@@ -287,7 +337,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
           onSelect: (val) => setState(() => requiredLevel = val),
         ),
         const SizedBox(height: 24),
-        
+
         // Mekan & Indoor/Outdoor Card
         Container(
           padding: const EdgeInsets.all(20),
@@ -298,12 +348,22 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Mekan', style: TextStyle(color: Colors.white70, fontSize: 14)),
+              const Text(
+                'Mekan',
+                style: TextStyle(color: Colors.white70, fontSize: 14),
+              ),
               const SizedBox(height: 12),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(t.openClosed, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                  Text(
+                    t.openClosed,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                   Switch(
                     value: isIndoor,
                     onChanged: (val) => setState(() => isIndoor = val),
@@ -315,7 +375,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
           ),
         ),
         const SizedBox(height: 24),
-        
+
         // Katılımcı Sayısı Card
         Container(
           padding: const EdgeInsets.all(20),
@@ -326,7 +386,14 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(t.participantCount, style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
+              Text(
+                t.participantCount,
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               const SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -336,7 +403,11 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                   }),
                   Text(
                     maxParticipants.toString(),
-                    style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   _buildCounterButton(Icons.add, () {
                     if (maxParticipants < 50) setState(() => maxParticipants++);
@@ -347,9 +418,9 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
           ),
         ),
         const SizedBox(height: 32),
-        
+
         _buildNextButton(),
-        
+
         const SizedBox(height: 32),
         _buildProTip(),
       ],
@@ -362,7 +433,11 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
       children: [
         const Text(
           'Zaman ve Detaylar',
-          style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 32,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         const SizedBox(height: 8),
         Text(
@@ -370,14 +445,14 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
           style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 16),
         ),
         const SizedBox(height: 32),
-        
+
         _buildLabel(t.title),
         _buildCustomTextField(
           controller: _titleController,
           hint: t.eventTitleHint,
         ),
         const SizedBox(height: 24),
-        
+
         Row(
           children: [
             Expanded(
@@ -386,7 +461,9 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                 children: [
                   _buildLabel(t.date),
                   _buildPickerTile(
-                    label: selectedDate == null ? t.select : '${selectedDate!.day}/${selectedDate!.month}',
+                    label: selectedDate == null
+                        ? t.select
+                        : '${selectedDate!.day}/${selectedDate!.month}',
                     icon: Icons.calendar_today,
                     onTap: () async {
                       final date = await showDatePicker(
@@ -408,7 +485,9 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                 children: [
                   _buildLabel(t.time),
                   _buildPickerTile(
-                    label: selectedTime == null ? t.select : selectedTime!.format(context),
+                    label: selectedTime == null
+                        ? t.select
+                        : selectedTime!.format(context),
                     icon: Icons.access_time,
                     onTap: () async {
                       final time = await showTimePicker(
@@ -424,7 +503,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
           ],
         ),
         const SizedBox(height: 24),
-        
+
         _buildLabel(t.descriptionOptional),
         _buildCustomTextField(
           controller: _descriptionController,
@@ -432,7 +511,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
           maxLines: 4,
         ),
         const SizedBox(height: 32),
-        
+
         _buildNextButton(),
       ],
     );
@@ -444,7 +523,11 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
       children: [
         const Text(
           'Konum Seç',
-          style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 32,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         const SizedBox(height: 8),
         Text(
@@ -452,7 +535,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
           style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 16),
         ),
         const SizedBox(height: 32),
-        
+
         _buildLabel(t.country),
         _buildCustomDropdown(
           value: selectedCountry,
@@ -464,7 +547,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
           }),
         ),
         const SizedBox(height: 20),
-        
+
         _buildLabel(t.province),
         _buildCustomDropdown(
           value: selectedProvince,
@@ -476,16 +559,18 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
           }),
         ),
         const SizedBox(height: 20),
-        
+
         _buildLabel(t.district),
         _buildCustomDropdown(
           value: selectedDistrict,
           hint: t.selectDistrict,
-          items: selectedProvince != null ? turkeyProvinces[selectedProvince]! : [],
+          items: selectedProvince != null
+              ? turkeyProvinces[selectedProvince]!
+              : [],
           onChanged: (val) => setState(() => selectedDistrict = val),
         ),
         const SizedBox(height: 24),
-        
+
         _buildLabel(t.venueSearch),
         _buildCustomTextField(
           controller: _venueController,
@@ -493,7 +578,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
           onChanged: _onLocationChanged,
           prefixIcon: Icons.place_outlined,
         ),
-        
+
         if (_suggestions.isNotEmpty)
           Container(
             margin: const EdgeInsets.only(top: 8),
@@ -505,11 +590,15 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: _suggestions.length,
-              separatorBuilder: (_, __) => const Divider(color: Colors.white12, height: 1),
+              separatorBuilder: (_, __) =>
+                  const Divider(color: Colors.white12, height: 1),
               itemBuilder: (context, index) {
                 final s = _suggestions[index];
                 return ListTile(
-                  title: Text(s.description, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                  title: Text(
+                    s.description,
+                    style: const TextStyle(color: Colors.white70, fontSize: 13),
+                  ),
                   onTap: () {
                     setState(() {
                       _venueController.text = s.description;
@@ -522,9 +611,9 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
               },
             ),
           ),
-        
+
         const SizedBox(height: 32),
-        
+
         SizedBox(
           width: double.infinity,
           height: 64,
@@ -533,20 +622,28 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
             style: ElevatedButton.styleFrom(
               backgroundColor: MatchFitTheme.accentGreen,
               foregroundColor: Colors.black,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(32),
+              ),
               elevation: 8,
               shadowColor: MatchFitTheme.accentGreen.withOpacity(0.4),
             ),
-            child: _isLoading 
-              ? const CircularProgressIndicator(color: Colors.black)
-              : Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(t.publishEvent, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
-                    const SizedBox(width: 8),
-                    const Icon(Icons.check_circle_outline),
-                  ],
-                ),
+            child: _isLoading
+                ? const CircularProgressIndicator(color: Colors.black)
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        t.publishEvent,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Icon(Icons.check_circle_outline),
+                    ],
+                  ),
           ),
         ),
       ],
@@ -556,11 +653,23 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   Widget _buildLabel(String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0),
-      child: Text(text, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w500)),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 16,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
     );
   }
 
-  Widget _buildCustomDropdown({String? value, String? hint, required List<String> items, required Function(String?) onChanged}) {
+  Widget _buildCustomDropdown({
+    String? value,
+    String? hint,
+    required List<String> items,
+    required Function(String?) onChanged,
+  }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       decoration: BoxDecoration(
@@ -571,25 +680,37 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: (value != null && items.contains(value)) ? value : null,
-          hint: hint != null ? Text(hint, style: const TextStyle(color: Colors.white54)) : null,
+          hint: hint != null
+              ? Text(hint, style: const TextStyle(color: Colors.white54))
+              : null,
           dropdownColor: const Color(0xFF1A1A1A),
           icon: const Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.keyboard_arrow_down, color: MatchFitTheme.accentGreen, size: 18),
+              Icon(
+                Icons.keyboard_arrow_down,
+                color: MatchFitTheme.accentGreen,
+                size: 18,
+              ),
               Icon(Icons.keyboard_arrow_down, color: Colors.white30, size: 18),
             ],
           ),
           isExpanded: true,
           style: const TextStyle(color: Colors.white, fontSize: 16),
-          items: items.map((item) => DropdownMenuItem(value: item, child: Text(item))).toList(),
+          items: items
+              .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+              .toList(),
           onChanged: onChanged,
         ),
       ),
     );
   }
 
-  Widget _buildSegmentedControl({required List<String> options, required String current, required Function(String) onSelect}) {
+  Widget _buildSegmentedControl({
+    required List<String> options,
+    required String current,
+    required Function(String) onSelect,
+  }) {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
@@ -605,7 +726,9 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 decoration: BoxDecoration(
-                  color: active ? MatchFitTheme.accentGreen : Colors.transparent,
+                  color: active
+                      ? MatchFitTheme.accentGreen
+                      : Colors.transparent,
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Text(
@@ -624,16 +747,26 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
     );
   }
 
-  Widget _buildCounterButton(IconData icon, VoidCallback onTap, {bool isPrimary = false}) {
+  Widget _buildCounterButton(
+    IconData icon,
+    VoidCallback onTap, {
+    bool isPrimary = false,
+  }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: isPrimary ? MatchFitTheme.accentGreen : Colors.white.withOpacity(0.05),
+          color: isPrimary
+              ? MatchFitTheme.accentGreen
+              : Colors.white.withOpacity(0.05),
           shape: BoxShape.circle,
         ),
-        child: Icon(icon, color: isPrimary ? Colors.black : Colors.white, size: 24),
+        child: Icon(
+          icon,
+          color: isPrimary ? Colors.black : Colors.white,
+          size: 24,
+        ),
       ),
     );
   }
@@ -647,14 +780,19 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
         style: ElevatedButton.styleFrom(
           backgroundColor: MatchFitTheme.accentGreen,
           foregroundColor: Colors.black,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(32),
+          ),
           elevation: 8,
           shadowColor: MatchFitTheme.accentGreen.withOpacity(0.4),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(t.nextStep, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+            Text(
+              t.nextStep,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+            ),
             const SizedBox(width: 8),
             const Icon(Icons.arrow_forward),
           ],
@@ -671,9 +809,14 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
         color: const Color(0xFF1A1A1A),
         borderRadius: BorderRadius.circular(32),
         image: DecorationImage(
-          image: const NetworkImage('https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=2070&auto=format&fit=crop'),
+          image: const NetworkImage(
+            'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=2070&auto=format&fit=crop',
+          ),
           fit: BoxFit.cover,
-          colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.7), BlendMode.darken),
+          colorFilter: ColorFilter.mode(
+            Colors.black.withOpacity(0.7),
+            BlendMode.darken,
+          ),
         ),
       ),
       child: Column(
@@ -686,19 +829,36 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: Colors.blue.withOpacity(0.5)),
             ),
-            child: const Text('PRO TİP', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 12)),
+            child: const Text(
+              'PRO TİP',
+              style: TextStyle(
+                color: Colors.blue,
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+              ),
+            ),
           ),
           const SizedBox(height: 12),
           const Text(
             'Grup etkinlikleri %40 daha hızlı\neşleşme sağlar.',
-            style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildCustomTextField({required TextEditingController controller, required String hint, int maxLines = 1, Function(String)? onChanged, IconData? prefixIcon}) {
+  Widget _buildCustomTextField({
+    required TextEditingController controller,
+    required String hint,
+    int maxLines = 1,
+    Function(String)? onChanged,
+    IconData? prefixIcon,
+  }) {
     return TextField(
       controller: controller,
       maxLines: maxLines,
@@ -707,16 +867,25 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: const TextStyle(color: Colors.white30),
-        prefixIcon: prefixIcon != null ? Icon(prefixIcon, color: Colors.white30) : null,
+        prefixIcon: prefixIcon != null
+            ? Icon(prefixIcon, color: Colors.white30)
+            : null,
         filled: true,
         fillColor: const Color(0xFF1A1A1A),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(20),
+          borderSide: BorderSide.none,
+        ),
         contentPadding: const EdgeInsets.all(20),
       ),
     );
   }
 
-  Widget _buildPickerTile({required String label, required IconData icon, required VoidCallback onTap}) {
+  Widget _buildPickerTile({
+    required String label,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -730,7 +899,13 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
           children: [
             Icon(icon, color: Colors.white54, size: 20),
             const SizedBox(width: 12),
-            Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ],
         ),
       ),

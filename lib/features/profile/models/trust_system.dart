@@ -1,8 +1,6 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../core/theme.dart';
 import '../../auth/repositories/auth_repository.dart';
 
 // ── Trust Level Model ──────────────────────────────────────────────
@@ -27,28 +25,46 @@ class TrustLevelInfo {
 
 const Map<TrustLevel, TrustLevelInfo> kTrustLevels = {
   TrustLevel.rookie: TrustLevelInfo(
-    label: 'Rookie', emoji: '🟢', color: Color(0xFF6EE7B7),
-    minScore: 0, maxScore: 20,
+    label: 'Rookie',
+    emoji: '🟢',
+    color: Color(0xFF6EE7B7),
+    minScore: 0,
+    maxScore: 20,
   ),
   TrustLevel.active: TrustLevelInfo(
-    label: 'Active Player', emoji: '🔵', color: Color(0xFF60A5FA),
-    minScore: 20, maxScore: 40,
+    label: 'Active Player',
+    emoji: '🔵',
+    color: Color(0xFF60A5FA),
+    minScore: 20,
+    maxScore: 40,
   ),
   TrustLevel.reliable: TrustLevelInfo(
-    label: 'Reliable Player', emoji: '🟣', color: Color(0xFFC084FC),
-    minScore: 40, maxScore: 60,
+    label: 'Reliable Player',
+    emoji: '🟣',
+    color: Color(0xFFC084FC),
+    minScore: 40,
+    maxScore: 60,
   ),
   TrustLevel.pro: TrustLevelInfo(
-    label: 'Pro Player', emoji: '🔵', color: Color(0xFF38BDF8),
-    minScore: 60, maxScore: 80,
+    label: 'Pro Player',
+    emoji: '🔵',
+    color: Color(0xFF38BDF8),
+    minScore: 60,
+    maxScore: 80,
   ),
   TrustLevel.elite: TrustLevelInfo(
-    label: 'Elite', emoji: '🟡', color: Color(0xFFFBBF24),
-    minScore: 80, maxScore: 95,
+    label: 'Elite',
+    emoji: '🟡',
+    color: Color(0xFFFBBF24),
+    minScore: 80,
+    maxScore: 95,
   ),
   TrustLevel.legend: TrustLevelInfo(
-    label: 'Legend', emoji: '👑', color: Color(0xFFFFD700),
-    minScore: 95, maxScore: 100,
+    label: 'Legend',
+    emoji: '👑',
+    color: Color(0xFFFFD700),
+    minScore: 95,
+    maxScore: 100,
   ),
 };
 
@@ -61,11 +77,13 @@ TrustLevel getTrustLevel(int score) {
   return TrustLevel.rookie;
 }
 
-TrustLevelInfo getTrustLevelInfo(int score) => kTrustLevels[getTrustLevel(score)]!;
+TrustLevelInfo getTrustLevelInfo(int score) =>
+    kTrustLevels[getTrustLevel(score)]!;
 
 // ── Badge Definitions ──────────────────────────────────────────────
 
 enum BadgeCategory { trust, social, activity, special }
+
 enum BadgeDifficulty { easy, medium, hard }
 
 class BadgeDef {
@@ -214,58 +232,65 @@ class TrustScoreData {
   }
 
   factory TrustScoreData.empty() => const TrustScoreData(
-    total: 0, reliability: 0, social: 0, activity: 0,
-    noShowCount: 0, streakCount: 0, earnedBadgeKeys: [],
+    total: 0,
+    reliability: 0,
+    social: 0,
+    activity: 0,
+    noShowCount: 0,
+    streakCount: 0,
+    earnedBadgeKeys: [],
   );
 }
 
 // ── Provider ────────────────────────────────────────────────────────
 
-final trustScoreProvider = FutureProvider.autoDispose.family<TrustScoreData, String?>((ref, userId) async {
-  try {
-    final targetId = userId?.isNotEmpty == true
-        ? userId!
-        : ref.read(authRepositoryProvider).currentUser?.id;
-    if (targetId == null || targetId.isEmpty) return TrustScoreData.empty();
+final trustScoreProvider = FutureProvider.autoDispose
+    .family<TrustScoreData, String?>((ref, userId) async {
+      try {
+        final targetId = userId?.isNotEmpty == true
+            ? userId!
+            : ref.read(authRepositoryProvider).currentUser?.id;
+        if (targetId == null || targetId.isEmpty) return TrustScoreData.empty();
 
-    final sb = Supabase.instance.client;
+        final sb = Supabase.instance.client;
 
-    // Profil verisi (tek sorgu, timeout ile)
-    final profile = await sb
-        .from('profiles')
-        .select('trust_score, reliability_score, social_score, activity_score, no_show_count, streak_count')
-        .eq('id', targetId)
-        .maybeSingle()
-        .timeout(const Duration(seconds: 8));
+        // Profil verisi (tek sorgu, timeout ile)
+        final profile = await sb
+            .from('profiles')
+            .select(
+              'trust_score, reliability_score, social_score, activity_score, no_show_count, streak_count',
+            )
+            .eq('id', targetId)
+            .maybeSingle()
+            .timeout(const Duration(seconds: 8));
 
-    // Rozetler — ayrı try/catch, tablo yoksa boş dön
-    List<String> badges = [];
-    try {
-      final badgesRes = await sb
-          .from('user_badges')
-          .select('badge_key')
-          .eq('user_id', targetId)
-          .timeout(const Duration(seconds: 5));
-      badges = List<Map<String, dynamic>>.from(badgesRes as List)
-          .map((b) => b['badge_key'] as String)
-          .toList();
-    } catch (_) {
-      // user_badges tablosu yoksa veya RLS engelliyorsa boş bırak
-      badges = [];
-    }
+        // Rozetler — ayrı try/catch, tablo yoksa boş dön
+        List<String> badges = [];
+        try {
+          final badgesRes = await sb
+              .from('user_badges')
+              .select('badge_key')
+              .eq('user_id', targetId)
+              .timeout(const Duration(seconds: 5));
+          badges = List<Map<String, dynamic>>.from(
+            badgesRes as List,
+          ).map((b) => b['badge_key'] as String).toList();
+        } catch (_) {
+          // user_badges tablosu yoksa veya RLS engelliyorsa boş bırak
+          badges = [];
+        }
 
-    return TrustScoreData(
-      total: profile?['trust_score'] as int? ?? 0,
-      reliability: profile?['reliability_score'] as int? ?? 0,
-      social: profile?['social_score'] as int? ?? 0,
-      activity: profile?['activity_score'] as int? ?? 0,
-      noShowCount: profile?['no_show_count'] as int? ?? 0,
-      streakCount: profile?['streak_count'] as int? ?? 0,
-      earnedBadgeKeys: badges,
-    );
-  } catch (e) {
-    // Herhangi bir hata durumunda boş veri dön — spinner'ı sonlandır
-    return TrustScoreData.empty();
-  }
-});
-
+        return TrustScoreData(
+          total: profile?['trust_score'] as int? ?? 0,
+          reliability: profile?['reliability_score'] as int? ?? 0,
+          social: profile?['social_score'] as int? ?? 0,
+          activity: profile?['activity_score'] as int? ?? 0,
+          noShowCount: profile?['no_show_count'] as int? ?? 0,
+          streakCount: profile?['streak_count'] as int? ?? 0,
+          earnedBadgeKeys: badges,
+        );
+      } catch (e) {
+        // Herhangi bir hata durumunda boş veri dön — spinner'ı sonlandır
+        return TrustScoreData.empty();
+      }
+    });

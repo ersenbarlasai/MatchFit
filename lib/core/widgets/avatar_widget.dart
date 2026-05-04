@@ -149,10 +149,10 @@ class _AvatarWidgetState extends State<AvatarWidget> {
                             color: MatchFitTheme.accentGreen, strokeWidth: 2),
                       ),
                     )
-                  : hasImage
-                      ? Image.network(
-                          rawUrl!,
-                          fit: BoxFit.cover,
+                      : hasImage
+                          ? Image.network(
+                              rawUrl,
+                              fit: BoxFit.cover,
                           width: widget.radius * 2,
                           height: widget.radius * 2,
                           errorBuilder: (_, __, ___) => _initialsWidget(),

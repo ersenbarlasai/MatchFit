@@ -4,10 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:matchfit/core/theme.dart';
 import '../repositories/event_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:matchfit/core/services/location_search_service.dart';
 import 'package:matchfit/core/constants/location_data.dart';
 import 'package:matchfit/core/constants/sports_data.dart';
-import 'dart:async';
 
 class EditEventScreen extends ConsumerStatefulWidget {
   final Map<String, dynamic> event;
@@ -21,11 +19,11 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
   late final TextEditingController _titleController;
   late final TextEditingController _venueController;
   late final TextEditingController _descriptionController;
-  
+
   String selectedCountry = 'Türkiye';
   String? selectedProvince;
   String? selectedDistrict;
-  
+
   String? selectedCategory;
   late String selectedSport;
   late String requiredLevel;
@@ -35,24 +33,15 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
   TimeOfDay? selectedTime;
   bool _isLoading = false;
 
-  // Location search state
-  final _searchService = LocationSearchService();
-  List<LocationSuggestion> _suggestions = [];
-  Timer? _debounce;
   double? _selectedLat;
   double? _selectedLng;
 
-  void _onLocationChanged(String value) {
-    if (_debounce?.isActive ?? false) _debounce!.cancel();
-    _debounce = Timer(const Duration(milliseconds: 500), () async {
-      if (value.length > 2) {
-        final contextStr = '${selectedDistrict ?? ''} ${selectedProvince ?? ''} $selectedCountry';
-        final results = await _searchService.search('$value $contextStr'.trim());
-        setState(() => _suggestions = results);
-      } else {
-        setState(() => _suggestions = []);
-      }
-    });
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _venueController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
   }
 
   @override
@@ -62,7 +51,7 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
     _titleController = TextEditingController(text: e['title']);
     _venueController = TextEditingController(text: '');
     _descriptionController = TextEditingController(text: e['description']);
-    
+
     final oldLoc = e['location_name'] ?? e['location_text'] ?? '';
     if (oldLoc.contains(',')) {
       final parts = oldLoc.split(',').map((p) => p.trim()).toList();
@@ -75,50 +64,63 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
         }
       }
     }
-    
+
     selectedSport = e['sports']?['name'] ?? 'Tenis';
     try {
-      selectedCategory = sportsData.firstWhere((c) => c.subcategories.contains(selectedSport)).name;
+      selectedCategory = sportsData
+          .firstWhere((c) => c.subcategories.contains(selectedSport))
+          .name;
     } catch (_) {
       selectedCategory = 'RAKET SPORLARI';
     }
 
     requiredLevel = e['required_level'] ?? 'Başlangıç';
     // Mapping for legacy/mixed data
-    if (requiredLevel == 'Any' || requiredLevel == 'Beginner') requiredLevel = 'Başlangıç';
+    if (requiredLevel == 'Any' || requiredLevel == 'Beginner')
+      requiredLevel = 'Başlangıç';
     if (requiredLevel == 'Intermediate') requiredLevel = 'Orta';
     if (requiredLevel == 'Advanced') requiredLevel = 'İleri';
 
     isIndoor = e['is_indoor'] as bool? ?? false;
     maxParticipants = (e['max_participants'] as num?)?.toDouble() ?? 12.0;
-    
+
     if (e['event_date'] != null) {
       selectedDate = DateTime.parse(e['event_date']);
     }
-    
+
     if (e['start_time'] != null) {
       final parts = (e['start_time'] as String).split(':');
       if (parts.length >= 2) {
-        selectedTime = TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+        selectedTime = TimeOfDay(
+          hour: int.parse(parts[0]),
+          minute: int.parse(parts[1]),
+        );
       }
     }
-    
+
     _selectedLat = (e['lat'] as num?)?.toDouble();
     _selectedLng = (e['lng'] as num?)?.toDouble();
   }
 
   Future<void> _updateEvent() async {
     String? error;
-    if (_titleController.text.isEmpty) error = 'Etkinlik başlığı gereklidir';
-    else if (selectedCategory == null) error = 'Ana kategori gereklidir';
-    else if (selectedSport == null) error = 'Alt branş gereklidir';
-    else if (selectedDate == null) error = 'Tarih gereklidir';
-    else if (selectedTime == null) error = 'Saat gereklidir';
-    else if (selectedProvince == null) error = 'Şehir gereklidir';
-    else if (selectedDistrict == null) error = 'İlçe gereklidir';
+    if (_titleController.text.isEmpty)
+      error = 'Etkinlik başlığı gereklidir';
+    else if (selectedCategory == null)
+      error = 'Ana kategori gereklidir';
+    else if (selectedDate == null)
+      error = 'Tarih gereklidir';
+    else if (selectedTime == null)
+      error = 'Saat gereklidir';
+    else if (selectedProvince == null)
+      error = 'Şehir gereklidir';
+    else if (selectedDistrict == null)
+      error = 'İlçe gereklidir';
 
     if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error)));
       return;
     }
 
@@ -129,18 +131,24 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
           .select('id')
           .ilike('name', selectedSport)
           .maybeSingle();
-          
+
       if (sportResponse == null) {
-        throw Exception('"$selectedSport" branşı veritabanında bulunamadı. Lütfen SQL scriptini çalıştırın.');
+        throw Exception(
+          '"$selectedSport" branşı veritabanında bulunamadı. Lütfen SQL scriptini çalıştırın.',
+        );
       }
 
       final eventDate = DateTime(
-        selectedDate!.year, selectedDate!.month, selectedDate!.day,
+        selectedDate!.year,
+        selectedDate!.month,
+        selectedDate!.day,
       );
-      
-      final formattedTime = '${selectedTime!.hour.toString().padLeft(2, '0')}:${selectedTime!.minute.toString().padLeft(2, '0')}:00';
 
-      final fullLocationName = '$selectedDistrict, $selectedProvince, $selectedCountry${_venueController.text.isNotEmpty ? ' - ${_venueController.text}' : ''}';
+      final formattedTime =
+          '${selectedTime!.hour.toString().padLeft(2, '0')}:${selectedTime!.minute.toString().padLeft(2, '0')}:00';
+
+      final fullLocationName =
+          '$selectedDistrict, $selectedProvince, $selectedCountry${_venueController.text.isNotEmpty ? ' - ${_venueController.text}' : ''}';
 
       final eventData = {
         'title': _titleController.text,
@@ -156,19 +164,21 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
         'sport_id': sportResponse['id'],
       };
 
-      await ref.read(eventRepositoryProvider).updateEvent(widget.event['id'].toString(), eventData);
-      
+      await ref
+          .read(eventRepositoryProvider)
+          .updateEvent(widget.event['id'].toString(), eventData);
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Etkinlik güncellendi!')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Etkinlik güncellendi!')));
         context.pop();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Hata: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Hata: $e')));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -194,36 +204,78 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
             TextField(
               controller: _titleController,
               style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(labelText: 'Etkinlik Başlığı', labelStyle: TextStyle(color: Colors.white70), border: OutlineInputBorder()),
+              decoration: const InputDecoration(
+                labelText: 'Etkinlik Başlığı',
+                labelStyle: TextStyle(color: Colors.white70),
+                border: OutlineInputBorder(),
+              ),
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
-              value: (selectedCategory != null && sportsData.any((c) => c.name == selectedCategory)) ? selectedCategory : null,
+              value:
+                  (selectedCategory != null &&
+                      sportsData.any((c) => c.name == selectedCategory))
+                  ? selectedCategory
+                  : null,
               dropdownColor: const Color(0xFF1A1A1A),
               style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(labelText: 'Ana Kategori', labelStyle: TextStyle(color: Colors.white70), border: OutlineInputBorder()),
-              items: sportsData.map((c) => DropdownMenuItem<String>(value: c.name, child: Text(c.name))).toList(),
+              decoration: const InputDecoration(
+                labelText: 'Ana Kategori',
+                labelStyle: TextStyle(color: Colors.white70),
+                border: OutlineInputBorder(),
+              ),
+              items: sportsData
+                  .map(
+                    (c) => DropdownMenuItem<String>(
+                      value: c.name,
+                      child: Text(c.name),
+                    ),
+                  )
+                  .toList(),
               onChanged: (value) => setState(() {
                 selectedCategory = value;
               }),
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
-              value: (selectedSport != null && (selectedCategory != null && sportsData.firstWhere((c) => c.name == selectedCategory).subcategories.contains(selectedSport))) ? selectedSport : null,
+              value:
+                  (selectedCategory != null &&
+                      sportsData
+                          .firstWhere((c) => c.name == selectedCategory)
+                          .subcategories
+                          .contains(selectedSport))
+                  ? selectedSport
+                  : null,
               dropdownColor: const Color(0xFF1A1A1A),
               style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(labelText: 'Alt Branş', labelStyle: TextStyle(color: Colors.white70), border: OutlineInputBorder()),
-              items: (selectedCategory != null 
-                ? sportsData.firstWhere((c) => c.name == selectedCategory).subcategories 
-                : <String>[])
-                  .map<DropdownMenuItem<String>>((s) => DropdownMenuItem<String>(value: s, child: Text(s)))
-                  .toList(),
+              decoration: const InputDecoration(
+                labelText: 'Alt Branş',
+                labelStyle: TextStyle(color: Colors.white70),
+                border: OutlineInputBorder(),
+              ),
+              items:
+                  (selectedCategory != null
+                          ? sportsData
+                                .firstWhere((c) => c.name == selectedCategory)
+                                .subcategories
+                          : <String>[])
+                      .map<DropdownMenuItem<String>>(
+                        (s) =>
+                            DropdownMenuItem<String>(value: s, child: Text(s)),
+                      )
+                      .toList(),
               onChanged: (value) => setState(() => selectedSport = value!),
             ),
             const SizedBox(height: 16),
             Row(
               children: [
-                const Text('Mekan:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                const Text(
+                  'Mekan:',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
                 const SizedBox(width: 12),
                 ChoiceChip(
                   label: const Text('Açık'),
@@ -249,15 +301,25 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
                       final date = await showDatePicker(
                         context: context,
                         initialDate: selectedDate ?? DateTime.now(),
-                        firstDate: DateTime.now().subtract(const Duration(days: 30)),
+                        firstDate: DateTime.now().subtract(
+                          const Duration(days: 30),
+                        ),
                         lastDate: DateTime.now().add(const Duration(days: 90)),
                       );
                       if (date != null) setState(() => selectedDate = date);
                     },
                     child: Container(
                       padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(border: Border.all(color: Colors.white24), borderRadius: BorderRadius.circular(12)),
-                      child: Text(selectedDate == null ? 'Tarih Seç' : '${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}', style: const TextStyle(color: Colors.white)),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.white24),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        selectedDate == null
+                            ? 'Tarih Seç'
+                            : '${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}',
+                        style: const TextStyle(color: Colors.white),
+                      ),
                     ),
                   ),
                 ),
@@ -273,22 +335,45 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
                     },
                     child: Container(
                       padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(border: Border.all(color: Colors.white24), borderRadius: BorderRadius.circular(12)),
-                      child: Text(selectedTime == null ? 'Saat Seç' : selectedTime!.format(context), style: const TextStyle(color: Colors.white)),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.white24),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        selectedTime == null
+                            ? 'Saat Seç'
+                            : selectedTime!.format(context),
+                        style: const TextStyle(color: Colors.white),
+                      ),
                     ),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 24),
-            const Text('Konum', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+            const Text(
+              'Konum',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
               value: selectedCountry,
               dropdownColor: const Color(0xFF1A1A1A),
               style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(labelText: 'Ülke', labelStyle: TextStyle(color: Colors.white70), border: OutlineInputBorder()),
-              items: countries.map<DropdownMenuItem<String>>((c) => DropdownMenuItem<String>(value: c, child: Text(c))).toList(),
+              decoration: const InputDecoration(
+                labelText: 'Ülke',
+                labelStyle: TextStyle(color: Colors.white70),
+                border: OutlineInputBorder(),
+              ),
+              items: countries
+                  .map<DropdownMenuItem<String>>(
+                    (c) => DropdownMenuItem<String>(value: c, child: Text(c)),
+                  )
+                  .toList(),
               onChanged: (val) => setState(() {
                 selectedCountry = val!;
                 selectedProvince = null;
@@ -300,9 +385,21 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
               value: selectedProvince,
               dropdownColor: const Color(0xFF1A1A1A),
               style: const TextStyle(color: Colors.white),
-              hint: const Text('Şehir Seç (İl)', style: TextStyle(color: Colors.white54)),
-              decoration: const InputDecoration(labelText: 'Şehir (İl)', labelStyle: TextStyle(color: Colors.white70), border: OutlineInputBorder()),
-              items: turkeyProvinces.keys.toList().map<DropdownMenuItem<String>>((p) => DropdownMenuItem<String>(value: p, child: Text(p))).toList(),
+              hint: const Text(
+                'Şehir Seç (İl)',
+                style: TextStyle(color: Colors.white54),
+              ),
+              decoration: const InputDecoration(
+                labelText: 'Şehir (İl)',
+                labelStyle: TextStyle(color: Colors.white70),
+                border: OutlineInputBorder(),
+              ),
+              items: turkeyProvinces.keys
+                  .toList()
+                  .map<DropdownMenuItem<String>>(
+                    (p) => DropdownMenuItem<String>(value: p, child: Text(p)),
+                  )
+                  .toList(),
               onChanged: (val) => setState(() {
                 selectedProvince = val;
                 selectedDistrict = null;
@@ -313,18 +410,36 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
               value: selectedDistrict,
               dropdownColor: const Color(0xFF1A1A1A),
               style: const TextStyle(color: Colors.white),
-              hint: const Text('İlçe Seç', style: TextStyle(color: Colors.white54)),
-              decoration: const InputDecoration(labelText: 'İlçe', labelStyle: TextStyle(color: Colors.white70), border: OutlineInputBorder()),
-              items: (selectedProvince != null ? turkeyProvinces[selectedProvince]! : <String>[])
-                  .map<DropdownMenuItem<String>>((d) => DropdownMenuItem<String>(value: d, child: Text(d)))
-                  .toList(),
+              hint: const Text(
+                'İlçe Seç',
+                style: TextStyle(color: Colors.white54),
+              ),
+              decoration: const InputDecoration(
+                labelText: 'İlçe',
+                labelStyle: TextStyle(color: Colors.white70),
+                border: OutlineInputBorder(),
+              ),
+              items:
+                  (selectedProvince != null
+                          ? turkeyProvinces[selectedProvince]!
+                          : <String>[])
+                      .map<DropdownMenuItem<String>>(
+                        (d) =>
+                            DropdownMenuItem<String>(value: d, child: Text(d)),
+                      )
+                      .toList(),
               onChanged: (val) => setState(() => selectedDistrict = val),
             ),
             const SizedBox(height: 24),
-            Text('Maksimum Katılımcı: ${maxParticipants.round()}', style: const TextStyle(color: Colors.white)),
+            Text(
+              'Maksimum Katılımcı: ${maxParticipants.round()}',
+              style: const TextStyle(color: Colors.white),
+            ),
             Slider(
               value: maxParticipants,
-              min: 2, max: 50, divisions: 48,
+              min: 2,
+              max: 50,
+              divisions: 48,
               activeColor: MatchFitTheme.accentGreen,
               onChanged: (v) => setState(() => maxParticipants = v),
             ),
@@ -333,12 +448,21 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
               value: requiredLevel,
               dropdownColor: const Color(0xFF1A1A1A),
               style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(labelText: 'Gerekli Seviye', labelStyle: TextStyle(color: Colors.white70), border: OutlineInputBorder()),
+              decoration: const InputDecoration(
+                labelText: 'Gerekli Seviye',
+                labelStyle: TextStyle(color: Colors.white70),
+                border: OutlineInputBorder(),
+              ),
               items: <String>['Başlangıç', 'Orta', 'İleri']
-                  .map<DropdownMenuItem<String>>((level) => DropdownMenuItem<String>(
-                    value: level, 
-                    child: Text(level, style: const TextStyle(color: Colors.white))
-                  ))
+                  .map<DropdownMenuItem<String>>(
+                    (level) => DropdownMenuItem<String>(
+                      value: level,
+                      child: Text(
+                        level,
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  )
                   .toList(),
               onChanged: (value) => setState(() => requiredLevel = value!),
             ),
@@ -347,7 +471,11 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
               controller: _descriptionController,
               maxLines: 3,
               style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(labelText: 'Açıklama', labelStyle: TextStyle(color: Colors.white70), border: OutlineInputBorder()),
+              decoration: const InputDecoration(
+                labelText: 'Açıklama',
+                labelStyle: TextStyle(color: Colors.white70),
+                border: OutlineInputBorder(),
+              ),
             ),
             const SizedBox(height: 32),
             ElevatedButton(
@@ -356,11 +484,16 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
                 backgroundColor: MatchFitTheme.accentGreen,
                 foregroundColor: Colors.black,
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
-              child: _isLoading 
-                ? const CircularProgressIndicator(color: Colors.black)
-                : const Text('Değişiklikleri Kaydet', style: TextStyle(fontWeight: FontWeight.bold)),
+              child: _isLoading
+                  ? const CircularProgressIndicator(color: Colors.black)
+                  : const Text(
+                      'Değişiklikleri Kaydet',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
             ),
           ],
         ),

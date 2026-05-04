@@ -18,12 +18,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _isLoading = false;
   bool _obscurePassword = true;
 
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
   Future<void> _submit() async {
     final t = AppLocalizations.of(context);
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(t.pleaseEnterEmailPassword)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(t.pleaseEnterEmailPassword)));
       return;
     }
 
@@ -37,9 +44,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (mounted) context.go('/home');
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${t.loginError}: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('${t.loginError}: $e')));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -58,7 +65,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 60),
-              
+
               // Title
               Text(
                 t.welcomeBack,
@@ -71,7 +78,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 12),
-              
+
               // Subtitle
               Text(
                 t.signInSubtitle,
@@ -83,9 +90,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 48),
-              
+
               // Email Field Label
-              Text(t.emailAddress, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+              Text(
+                t.emailAddress,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
+              ),
               const SizedBox(height: 8),
               // Email Field
               _buildTextField(
@@ -95,9 +109,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 keyboardType: TextInputType.emailAddress,
               ),
               const SizedBox(height: 20),
-              
+
               // Password Field Label
-              Text(t.password, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+              Text(
+                t.password,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
+              ),
               const SizedBox(height: 8),
               // Password Field
               _buildTextField(
@@ -108,11 +129,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 onSuffixTap: () {
                   setState(() => _obscurePassword = !_obscurePassword);
                 },
-                suffixIcon: _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                suffixIcon: _obscurePassword
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
               ),
-              
+
               const SizedBox(height: 12),
-              
+
               // Forgot Password Link
               Align(
                 alignment: Alignment.centerRight,
@@ -128,9 +151,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                 ),
               ),
-              
+
               const SizedBox(height: 32),
-              
+
               // Sign In Button
               ElevatedButton(
                 onPressed: _isLoading ? null : _submit,
@@ -147,40 +170,71 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ? const SizedBox(
                         height: 20,
                         width: 20,
-                        child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2),
+                        child: CircularProgressIndicator(
+                          color: Colors.black,
+                          strokeWidth: 2,
+                        ),
                       )
-                    : Text(t.signIn, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, letterSpacing: 0.5)),
+                    : Text(
+                        t.signIn,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 15,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
               ),
               const SizedBox(height: 40),
-              
+
               // Divider
               Row(
                 children: [
-                  Expanded(child: Divider(color: Colors.white.withOpacity(0.1))),
+                  Expanded(
+                    child: Divider(color: Colors.white.withOpacity(0.1)),
+                  ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Text(
                       t.orContinueWith,
-                      style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12, fontWeight: FontWeight.w500),
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.6),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
-                  Expanded(child: Divider(color: Colors.white.withOpacity(0.1))),
+                  Expanded(
+                    child: Divider(color: Colors.white.withOpacity(0.1)),
+                  ),
                 ],
               ),
               const SizedBox(height: 24),
-              
+
               // Social Buttons
               Row(
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: () {},
-                      icon: const Icon(Icons.g_mobiledata, color: Colors.white, size: 24),
-                      label: const Text('Google', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14)),
+                      icon: const Icon(
+                        Icons.g_mobiledata,
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                      label: const Text(
+                        'Google',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         side: BorderSide(color: Colors.white.withOpacity(0.1)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(24),
+                        ),
                         backgroundColor: const Color(0xFF1E1E1E),
                       ),
                     ),
@@ -189,12 +243,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: () {},
-                      icon: const Icon(Icons.apple, color: Colors.white, size: 20),
-                      label: const Text('Apple', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14)),
+                      icon: const Icon(
+                        Icons.apple,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                      label: const Text(
+                        'Apple',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         side: BorderSide(color: Colors.white.withOpacity(0.1)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(24),
+                        ),
                         backgroundColor: const Color(0xFF1E1E1E),
                       ),
                     ),
@@ -202,20 +269,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ],
               ),
               const SizedBox(height: 40),
-              
+
               // Footer
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
                     t.dontHaveAccount,
-                    style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 15),
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.8),
+                      fontSize: 15,
+                    ),
                   ),
                   GestureDetector(
                     onTap: () => context.push('/signup'),
                     child: Text(
                       t.signUp,
-                      style: const TextStyle(color: Color(0xFFB4C5FF), fontWeight: FontWeight.bold, fontSize: 15),
+                      style: const TextStyle(
+                        color: Color(0xFFB4C5FF),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
                     ),
                   ),
                 ],
@@ -244,7 +318,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
       decoration: InputDecoration(
         hintText: hintText,
-        hintStyle: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 15),
+        hintStyle: TextStyle(
+          color: Colors.white.withOpacity(0.4),
+          fontSize: 15,
+        ),
         floatingLabelBehavior: FloatingLabelBehavior.never,
         filled: true,
         fillColor: const Color(0xFF1E1E1E),
@@ -260,11 +337,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           borderRadius: BorderRadius.circular(24),
           borderSide: BorderSide(color: Colors.white.withOpacity(0.2)),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 20,
+          vertical: 18,
+        ),
         prefixIcon: Icon(icon, color: Colors.white.withOpacity(0.6), size: 22),
         suffixIcon: suffixIcon != null
             ? IconButton(
-                icon: Icon(suffixIcon, color: Colors.white.withOpacity(0.6), size: 22),
+                icon: Icon(
+                  suffixIcon,
+                  color: Colors.white.withOpacity(0.6),
+                  size: 22,
+                ),
                 onPressed: onSuffixTap,
               )
             : null,

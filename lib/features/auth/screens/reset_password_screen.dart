@@ -9,19 +9,26 @@ class ResetPasswordScreen extends ConsumerStatefulWidget {
   const ResetPasswordScreen({super.key});
 
   @override
-  ConsumerState<ResetPasswordScreen> createState() => _ResetPasswordScreenState();
+  ConsumerState<ResetPasswordScreen> createState() =>
+      _ResetPasswordScreenState();
 }
 
 class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
   final _emailController = TextEditingController();
   bool _isLoading = false;
 
+  @override
+  void dispose() {
+    _emailController.dispose();
+    super.dispose();
+  }
+
   Future<void> _submit() async {
     final t = AppLocalizations.of(context);
     if (_emailController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(t.pleaseEnterEmail)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(t.pleaseEnterEmail)));
       return;
     }
 
@@ -29,18 +36,18 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
     try {
       final authRepo = ref.read(authRepositoryProvider);
       await authRepo.resetPassword(_emailController.text.trim());
-      
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(t.resetLinkSent)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(t.resetLinkSent)));
         context.pop();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${t.error}: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -77,7 +84,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 60),
-              
+
               // Icon
               Center(
                 child: SizedBox(
@@ -93,7 +100,9 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: MatchFitTheme.accentGreen.withOpacity(0.05),
+                              color: MatchFitTheme.accentGreen.withOpacity(
+                                0.05,
+                              ),
                               blurRadius: 20,
                               spreadRadius: 5,
                             ),
@@ -114,7 +123,10 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                           decoration: BoxDecoration(
                             color: const Color(0xFF0052FF),
                             shape: BoxShape.circle,
-                            border: Border.all(color: const Color(0xFF161616), width: 3),
+                            border: Border.all(
+                              color: const Color(0xFF161616),
+                              width: 3,
+                            ),
                           ),
                           child: const Icon(
                             Icons.mail_outline,
@@ -128,7 +140,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                 ),
               ),
               const SizedBox(height: 40),
-              
+
               // Title
               Text(
                 t.resetPassword,
@@ -141,7 +153,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 12),
-              
+
               // Subtitle
               Text(
                 t.resetPasswordSubtitle,
@@ -153,15 +165,21 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 40),
-              
+
               // Email Field
               TextField(
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w500,
+                ),
                 decoration: InputDecoration(
                   hintText: 'player@matchfit.app',
-                  hintStyle: TextStyle(color: Colors.white.withOpacity(0.2), fontSize: 15),
+                  hintStyle: TextStyle(
+                    color: Colors.white.withOpacity(0.2),
+                    fontSize: 15,
+                  ),
                   floatingLabelBehavior: FloatingLabelBehavior.never,
                   filled: true,
                   fillColor: const Color(0xFF222222),
@@ -169,12 +187,19 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                     borderRadius: BorderRadius.circular(20),
                     borderSide: BorderSide.none,
                   ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-                  prefixIcon: Icon(Icons.mail_outline, color: Colors.white.withOpacity(0.4), size: 22),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 18,
+                  ),
+                  prefixIcon: Icon(
+                    Icons.mail_outline,
+                    color: Colors.white.withOpacity(0.4),
+                    size: 22,
+                  ),
                 ),
               ),
               const SizedBox(height: 24),
-              
+
               // Send Reset Link Button
               ElevatedButton(
                 onPressed: _isLoading ? null : _submit,
@@ -191,26 +216,40 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                     ? const SizedBox(
                         height: 20,
                         width: 20,
-                        child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2),
+                        child: CircularProgressIndicator(
+                          color: Colors.black,
+                          strokeWidth: 2,
+                        ),
                       )
                     : Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Text(t.sendResetLink, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, letterSpacing: 0.5)),
+                          Text(
+                            t.sendResetLink,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w900,
+                              fontSize: 15,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
                           const SizedBox(width: 8),
                           const Icon(Icons.arrow_forward, size: 20),
                         ],
                       ),
               ),
               const SizedBox(height: 32),
-              
+
               // Back to Login Link
               GestureDetector(
                 onTap: () => context.pop(),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.arrow_back, color: Colors.white.withOpacity(0.6), size: 16),
+                    Icon(
+                      Icons.arrow_back,
+                      color: Colors.white.withOpacity(0.6),
+                      size: 16,
+                    ),
                     const SizedBox(width: 8),
                     Text(
                       t.backToLogin,

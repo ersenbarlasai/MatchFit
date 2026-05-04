@@ -72,7 +72,7 @@ BEGIN
     d.lat,
     d.lng,
     'https://i.pravatar.cc/150?img=' || floor(random()*70+1)::int,
-    floor(random()*40 + 60)::int, -- 60 ile 100 arası trust score
+    0, -- Başlangıç skoru her zaman 0 olmalı
     TRUE,
     batch_id
   FROM public.cities c

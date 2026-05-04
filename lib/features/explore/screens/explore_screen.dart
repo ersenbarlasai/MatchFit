@@ -4,15 +4,12 @@ import 'package:go_router/go_router.dart';
 import 'package:matchfit/core/theme.dart';
 import 'package:matchfit/core/widgets/avatar_widget.dart';
 import 'package:matchfit/core/providers/profile_provider.dart';
-import 'dart:math' as math;
-import '../../matchmaker/repositories/matchmaker_repository.dart';
-import '../../auth/repositories/auth_repository.dart';
-import '../../home/screens/home_screen.dart'; // EventCard
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:matchfit/core/services/location_service.dart';
 import 'package:matchfit/core/constants/sports_data.dart';
 import '../../events/repositories/event_repository.dart';
+import '../../events/utils/event_time_utils.dart';
 import 'package:matchfit/core/l10n/app_localizations.dart';
 
 // ── Providers ─────────────────────────────────────────────────────
@@ -23,107 +20,133 @@ class ExploreDistanceNotifier extends Notifier<String> {
   void setDistance(String val) => state = val;
 }
 
-final exploreDistanceProvider = NotifierProvider<ExploreDistanceNotifier, String>(ExploreDistanceNotifier.new);
+final exploreDistanceProvider =
+    NotifierProvider<ExploreDistanceNotifier, String>(
+      ExploreDistanceNotifier.new,
+    );
 
 class ExploreCategoryNotifier extends Notifier<String> {
   @override
   String build() => 'Tüm Kategoriler';
   void setCategory(String val) => state = val;
 }
-final exploreCategoryProvider = NotifierProvider<ExploreCategoryNotifier, String>(ExploreCategoryNotifier.new);
+
+final exploreCategoryProvider =
+    NotifierProvider<ExploreCategoryNotifier, String>(
+      ExploreCategoryNotifier.new,
+    );
 
 class ExploreSportNotifier extends Notifier<String> {
   @override
   String build() => 'Tüm Branşlar';
   void setSport(String val) => state = val;
 }
-final exploreSportProvider = NotifierProvider<ExploreSportNotifier, String>(ExploreSportNotifier.new);
+
+final exploreSportProvider = NotifierProvider<ExploreSportNotifier, String>(
+  ExploreSportNotifier.new,
+);
 
 class ExploreLevelNotifier extends Notifier<String> {
   @override
   String build() => 'Tüm Seviyeler';
   void setLevel(String val) => state = val;
 }
-final exploreLevelProvider = NotifierProvider<ExploreLevelNotifier, String>(ExploreLevelNotifier.new);
+
+final exploreLevelProvider = NotifierProvider<ExploreLevelNotifier, String>(
+  ExploreLevelNotifier.new,
+);
 
 class ExploreDateNotifier extends Notifier<String> {
   @override
   String build() => 'Herhangi Tarih';
   void setDate(String val) => state = val;
 }
-final exploreDateProvider = NotifierProvider<ExploreDateNotifier, String>(ExploreDateNotifier.new);
+
+final exploreDateProvider = NotifierProvider<ExploreDateNotifier, String>(
+  ExploreDateNotifier.new,
+);
 
 class ExploreSettingNotifier extends Notifier<String> {
   @override
   String build() => 'Tüm Ortamlar'; // Indoor / Outdoor / All
   void setSetting(String val) => state = val;
 }
-final exploreSettingProvider = NotifierProvider<ExploreSettingNotifier, String>(ExploreSettingNotifier.new);
 
-final exploreMatchesProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
-  final userLoc = ref.watch(userLocationProvider).value;
-  final distanceStr = ref.watch(exploreDistanceProvider);
-  final selectedCategory = ref.watch(exploreCategoryProvider);
-  final selectedSport = ref.watch(exploreSportProvider);
-  final selectedLevel = ref.watch(exploreLevelProvider);
-  final selectedDate = ref.watch(exploreDateProvider);
-  final selectedSetting = ref.watch(exploreSettingProvider);
-  
-  double? radius = 50000;
-  if (distanceStr == '< 5km') radius = 5000;
-  if (distanceStr == '< 10km') radius = 10000;
-  if (distanceStr == '< 20km') radius = 20000;
-  if (distanceStr == 'Farketmez') radius = null;
+final exploreSettingProvider = NotifierProvider<ExploreSettingNotifier, String>(
+  ExploreSettingNotifier.new,
+);
 
-  final allEvents = await ref.read(eventRepositoryProvider).getNearbyEvents(
-    lat: userLoc?.latitude,
-    lng: userLoc?.longitude,
-    radius: radius,
-  );
+final exploreMatchesProvider =
+    FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
+      ref.watch(eventChangeProvider); // Watch for global changes
+      final userLoc = ref.watch(userLocationProvider).value;
+      final distanceStr = ref.watch(exploreDistanceProvider);
+      final selectedCategory = ref.watch(exploreCategoryProvider);
+      final selectedSport = ref.watch(exploreSportProvider);
+      final selectedLevel = ref.watch(exploreLevelProvider);
+      final selectedDate = ref.watch(exploreDateProvider);
+      final selectedSetting = ref.watch(exploreSettingProvider);
 
-  return allEvents.where((e) {
-    // Category & Sport filter
-    if (selectedCategory != 'Tüm Kategoriler') {
-      final cat = e['sports']?['category'] as String? ?? '';
-      if (cat != selectedCategory) return false;
-    }
-    if (selectedSport != 'Tüm Branşlar') {
-      final sName = e['sports']?['name'] as String? ?? '';
-      if (sName != selectedSport) return false;
-    }
+      double? radius = 50000;
+      if (distanceStr == '< 5km') radius = 5000;
+      if (distanceStr == '< 10km') radius = 10000;
+      if (distanceStr == '< 20km') radius = 20000;
+      if (distanceStr == 'Farketmez') radius = null;
 
-    // Level filter
-    if (selectedLevel != 'Tüm Seviyeler') {
-      final level = e['required_level'] as String? ?? 'Any';
-      if (level != selectedLevel) return false;
-    }
+      final allEvents = await ref
+          .read(eventRepositoryProvider)
+          .getNearbyEvents(
+            lat: userLoc?.latitude,
+            lng: userLoc?.longitude,
+            radius: radius,
+          );
 
-    // Date filter
-    if (selectedDate != 'Herhangi Tarih') {
-      final eDateStr = e['event_date'] as String?;
-      if (eDateStr != null) {
-        final eDate = DateTime.parse(eDateStr);
-        final now = DateTime.now();
-        final today = DateTime(now.year, now.month, now.day);
-        if (selectedDate == 'Bugün') {
-          if (eDate != today) return false;
-        } else if (selectedDate == 'Yarın') {
-          final tomorrow = today.add(const Duration(days: 1));
-          if (eDate != tomorrow) return false;
+      return allEvents.where((e) {
+        if (!EventTimeUtils.isUpcoming(e)) return false;
+
+        // Category & Sport filter
+        if (selectedCategory != 'Tüm Kategoriler') {
+          final cat = e['sports']?['category'] as String? ?? '';
+          if (cat != selectedCategory) return false;
         }
-      }
-    }
+        if (selectedSport != 'Tüm Branşlar') {
+          final sName = e['sports']?['name'] as String? ?? '';
+          if (sName != selectedSport) return false;
+        }
 
-    // Setting filter (Indoor/Outdoor)
-    if (selectedSetting != 'Tüm Ortamlar') {
-      final isIndoor = e['is_indoor'] as bool? ?? false;
-      if (selectedSetting == 'Kapalı' && !isIndoor) return false;
-      if (selectedSetting == 'Açık' && isIndoor) return false;
-    }
+        // Level filter
+        if (selectedLevel != 'Tüm Seviyeler') {
+          final level = e['required_level'] as String? ?? 'Any';
+          if (level != selectedLevel) return false;
+        }
 
-    return true;
-  }).toList();
-});
+        // Date filter
+        if (selectedDate != 'Herhangi Tarih') {
+          final eDateStr = e['event_date'] as String?;
+          if (eDateStr != null) {
+            final eDate = DateTime.tryParse(eDateStr);
+            if (eDate == null) return false;
+            final now = DateTime.now();
+            final today = DateTime(now.year, now.month, now.day);
+            if (selectedDate == 'Bugün') {
+              if (!EventTimeUtils.isSameDay(eDate, today)) return false;
+            } else if (selectedDate == 'Yarın') {
+              final tomorrow = today.add(const Duration(days: 1));
+              if (!EventTimeUtils.isSameDay(eDate, tomorrow)) return false;
+            }
+          }
+        }
+
+        // Setting filter (Indoor/Outdoor)
+        if (selectedSetting != 'Tüm Ortamlar') {
+          final isIndoor = e['is_indoor'] as bool? ?? false;
+          if (selectedSetting == 'Kapalı' && !isIndoor) return false;
+          if (selectedSetting == 'Açık' && isIndoor) return false;
+        }
+
+        return true;
+      }).toList();
+    });
 
 // ── Explore Screen ─────────────────────────────────────────────────
 
@@ -135,7 +158,6 @@ class ExploreScreen extends ConsumerStatefulWidget {
 }
 
 class _ExploreScreenState extends ConsumerState<ExploreScreen> {
-  bool _showAdvanced = false;
   bool _mapExpanded = false;
 
   final _distances = ['< 5km', '< 10km', '< 20km', 'Farketmez'];
@@ -176,8 +198,14 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                           radius: 21,
                           editable: false,
                         ),
-                        loading: () => const CircleAvatar(radius: 21, backgroundColor: Color(0xFF1E1E1E)),
-                        error: (_, __) => const CircleAvatar(radius: 21, backgroundColor: Color(0xFF1E1E1E)),
+                        loading: () => const CircleAvatar(
+                          radius: 21,
+                          backgroundColor: Color(0xFF1E1E1E),
+                        ),
+                        error: (_, __) => const CircleAvatar(
+                          radius: 21,
+                          backgroundColor: Color(0xFF1E1E1E),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -185,9 +213,14 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('${_greetingTime()}, Şampiyon',
-                              style: const TextStyle(
-                                  color: Colors.white, fontWeight: FontWeight.w900, fontSize: 17)),
+                          Text(
+                            '${_greetingTime()}, Şampiyon',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 17,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -197,9 +230,15 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                       decoration: BoxDecoration(
                         color: const Color(0xFF1E1E1E),
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white.withOpacity(0.08)),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.08),
+                        ),
                       ),
-                      child: const Icon(Icons.notifications_outlined, color: Colors.white70, size: 19),
+                      child: const Icon(
+                        Icons.notifications_outlined,
+                        color: Colors.white70,
+                        size: 19,
+                      ),
                     ),
                   ],
                 ),
@@ -218,11 +257,13 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                     GestureDetector(
                       onTap: () => _showSportPicker(context),
                       child: _FilterChip(
-                        label: ref.watch(exploreSportProvider) == 'Tüm Branşlar' 
-                          ? ref.watch(exploreCategoryProvider)
-                          : ref.watch(exploreSportProvider),
+                        label: ref.watch(exploreSportProvider) == 'Tüm Branşlar'
+                            ? ref.watch(exploreCategoryProvider)
+                            : ref.watch(exploreSportProvider),
                         icon: Icons.sports_tennis_outlined,
-                        isActive: ref.watch(exploreCategoryProvider) != 'Tüm Kategoriler',
+                        isActive:
+                            ref.watch(exploreCategoryProvider) !=
+                            'Tüm Kategoriler',
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -242,7 +283,8 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                       child: _FilterChip(
                         label: ref.watch(exploreDateProvider),
                         icon: Icons.calendar_today_outlined,
-                        isActive: ref.watch(exploreDateProvider) != 'Herhangi Tarih',
+                        isActive:
+                            ref.watch(exploreDateProvider) != 'Herhangi Tarih',
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -252,7 +294,8 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                       child: _FilterChip(
                         label: ref.watch(exploreSettingProvider),
                         icon: Icons.door_front_door_outlined,
-                        isActive: ref.watch(exploreSettingProvider) != 'Tüm Ortamlar',
+                        isActive:
+                            ref.watch(exploreSettingProvider) != 'Tüm Ortamlar',
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -262,7 +305,8 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                       child: _FilterChip(
                         label: ref.watch(exploreLevelProvider),
                         icon: Icons.trending_up,
-                        isActive: ref.watch(exploreLevelProvider) != 'Tüm Seviyeler',
+                        isActive:
+                            ref.watch(exploreLevelProvider) != 'Tüm Seviyeler',
                       ),
                     ),
                     const SizedBox(width: 20),
@@ -273,19 +317,24 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
 
           // ── Map ──
           if (!_mapExpanded) const SizedBox(height: 12),
-          _MapSection(expanded: _mapExpanded, onToggle: () => setState(() => _mapExpanded = !_mapExpanded)),
+          _MapSection(
+            expanded: _mapExpanded,
+            onToggle: () => setState(() => _mapExpanded = !_mapExpanded),
+          ),
 
           // ── Handle (hidden when expanded) ──
-          if (!_mapExpanded) ...
-          [
+          if (!_mapExpanded) ...[
             const SizedBox(height: 10),
             Center(
               child: GestureDetector(
                 onTap: () => setState(() => _mapExpanded = !_mapExpanded),
                 child: Container(
-                  width: 36, height: 4,
+                  width: 36,
+                  height: 4,
                   decoration: BoxDecoration(
-                      color: Colors.white24, borderRadius: BorderRadius.circular(2)),
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
             ),
@@ -293,26 +342,40 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
           ],
 
           // ── Nearby Matches (hidden when map expanded) ──
-          if (!_mapExpanded) ...
-          [
+          if (!_mapExpanded) ...[
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
                 children: [
-                  const Text('Yakındaki Maçlar',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 22)),
+                  const Text(
+                    'Yakındaki Maçlar',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 22,
+                    ),
+                  ),
                   const SizedBox(width: 10),
                   matchesAsync.when(
                     data: (events) => Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: MatchFitTheme.accentGreen.withOpacity(0.2),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: MatchFitTheme.accentGreen.withOpacity(0.4)),
+                        border: Border.all(
+                          color: MatchFitTheme.accentGreen.withOpacity(0.4),
+                        ),
                       ),
                       child: Text(
                         '${events.length}',
-                        style: const TextStyle(color: MatchFitTheme.accentGreen, fontSize: 12, fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                          color: MatchFitTheme.accentGreen,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                     loading: () => const SizedBox.shrink(),
@@ -329,9 +392,16 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
             Expanded(
               child: matchesAsync.when(
                 loading: () => const Center(
-                    child: CircularProgressIndicator(color: MatchFitTheme.accentGreen)),
+                  child: CircularProgressIndicator(
+                    color: MatchFitTheme.accentGreen,
+                  ),
+                ),
                 error: (e, _) => Center(
-                    child: Text('${AppLocalizations.of(context).error}: $e', style: const TextStyle(color: Colors.white54))),
+                  child: Text(
+                    '${AppLocalizations.of(context).error}: $e',
+                    style: const TextStyle(color: Colors.white54),
+                  ),
+                ),
                 data: (events) {
                   final selectedSport = ref.watch(exploreSportProvider);
                   final filtered = events.where((e) {
@@ -345,10 +415,18 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.search_off, color: Colors.white.withOpacity(0.2), size: 48),
+                          Icon(
+                            Icons.search_off,
+                            color: Colors.white.withOpacity(0.2),
+                            size: 48,
+                          ),
                           const SizedBox(height: 12),
-                          Text(AppLocalizations.of(context).noResults,
-                              style: TextStyle(color: Colors.white.withOpacity(0.3))),
+                          Text(
+                            AppLocalizations.of(context).noResults,
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.3),
+                            ),
+                          ),
                         ],
                       ),
                     );
@@ -374,32 +452,62 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
       backgroundColor: const Color(0xFF1E1E1E),
       isScrollControlled: true,
       useSafeArea: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       builder: (_) => Consumer(
         builder: (context, ref, _) {
           final selectedCategory = ref.watch(exploreCategoryProvider);
           final selectedSport = ref.watch(exploreSportProvider);
-          
+
           return Padding(
-            padding: EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.of(context).padding.bottom + 24),
+            padding: EdgeInsets.fromLTRB(
+              24,
+              16,
+              24,
+              MediaQuery.of(context).padding.bottom + 24,
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)))),
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 20),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Kategori Seç', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+                    const Text(
+                      'Kategori Seç',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    ),
                     if (selectedCategory != 'Tüm Kategoriler')
                       TextButton(
                         onPressed: () {
-                          ref.read(exploreCategoryProvider.notifier).setCategory('Tüm Kategoriler');
-                          ref.read(exploreSportProvider.notifier).setSport('Tüm Branşlar');
+                          ref
+                              .read(exploreCategoryProvider.notifier)
+                              .setCategory('Tüm Kategoriler');
+                          ref
+                              .read(exploreSportProvider.notifier)
+                              .setSport('Tüm Branşlar');
                           Navigator.pop(context);
                         },
-                        child: const Text('Sıfırla', style: TextStyle(color: MatchFitTheme.accentGreen)),
+                        child: const Text(
+                          'Sıfırla',
+                          style: TextStyle(color: MatchFitTheme.accentGreen),
+                        ),
                       ),
                   ],
                 ),
@@ -411,18 +519,40 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                       final active = cat.name == selectedCategory;
                       return GestureDetector(
                         onTap: () {
-                          ref.read(exploreCategoryProvider.notifier).setCategory(cat.name);
-                          ref.read(exploreSportProvider.notifier).setSport('Tüm Branşlar');
+                          ref
+                              .read(exploreCategoryProvider.notifier)
+                              .setCategory(cat.name);
+                          ref
+                              .read(exploreSportProvider.notifier)
+                              .setSport('Tüm Branşlar');
                         },
                         child: Container(
                           margin: const EdgeInsets.only(right: 8),
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: active ? MatchFitTheme.accentGreen.withOpacity(0.15) : Colors.transparent,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: active ? MatchFitTheme.accentGreen : Colors.white.withOpacity(0.1)),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
                           ),
-                          child: Text(cat.name, style: TextStyle(color: active ? MatchFitTheme.accentGreen : Colors.white60, fontWeight: FontWeight.bold, fontSize: 12)),
+                          decoration: BoxDecoration(
+                            color: active
+                                ? MatchFitTheme.accentGreen.withOpacity(0.15)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: active
+                                  ? MatchFitTheme.accentGreen
+                                  : Colors.white.withOpacity(0.1),
+                            ),
+                          ),
+                          child: Text(
+                            cat.name,
+                            style: TextStyle(
+                              color: active
+                                  ? MatchFitTheme.accentGreen
+                                  : Colors.white60,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
                         ),
                       );
                     }).toList(),
@@ -430,28 +560,53 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                 ),
                 if (selectedCategory != 'Tüm Kategoriler') ...[
                   const SizedBox(height: 24),
-                  const Text('Alt Branş Seç', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                  const Text(
+                    'Alt Branş Seç',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
                   const SizedBox(height: 12),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children: sportsData.firstWhere((c) => c.name == selectedCategory).subcategories.map((s) {
-                      final active = s == selectedSport;
-                      return GestureDetector(
-                        onTap: () {
-                          ref.read(exploreSportProvider.notifier).setSport(s);
-                          Navigator.pop(context);
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: active ? MatchFitTheme.accentGreen : const Color(0xFF2A2A2A),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(s, style: TextStyle(color: active ? Colors.black : Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
-                        ),
-                      );
-                    }).toList(),
+                    children: sportsData
+                        .firstWhere((c) => c.name == selectedCategory)
+                        .subcategories
+                        .map((s) {
+                          final active = s == selectedSport;
+                          return GestureDetector(
+                            onTap: () {
+                              ref
+                                  .read(exploreSportProvider.notifier)
+                                  .setSport(s);
+                              Navigator.pop(context);
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: active
+                                    ? MatchFitTheme.accentGreen
+                                    : const Color(0xFF2A2A2A),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                s,
+                                style: TextStyle(
+                                  color: active ? Colors.black : Colors.white70,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                          );
+                        })
+                        .toList(),
                   ),
                 ],
                 const SizedBox(height: 20),
@@ -464,33 +619,71 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
   }
 
   void _showDatePicker(BuildContext context) {
-    _showSimplePicker(context, 'Tarih Seç', _dates, exploreDateProvider, (ref, val) => ref.read(exploreDateProvider.notifier).setDate(val));
+    _showSimplePicker(
+      context,
+      'Tarih Seç',
+      _dates,
+      exploreDateProvider,
+      (ref, val) => ref.read(exploreDateProvider.notifier).setDate(val),
+    );
   }
 
   void _showLevelPicker(BuildContext context) {
-    _showSimplePicker(context, 'Yetenek Seviyesi', _levels, exploreLevelProvider, (ref, val) => ref.read(exploreLevelProvider.notifier).setLevel(val));
+    _showSimplePicker(
+      context,
+      'Yetenek Seviyesi',
+      _levels,
+      exploreLevelProvider,
+      (ref, val) => ref.read(exploreLevelProvider.notifier).setLevel(val),
+    );
   }
 
   void _showSettingPicker(BuildContext context) {
-    _showSimplePicker(context, 'Ortam', _settings, exploreSettingProvider, (ref, val) => ref.read(exploreSettingProvider.notifier).setSetting(val));
+    _showSimplePicker(
+      context,
+      'Ortam',
+      _settings,
+      exploreSettingProvider,
+      (ref, val) => ref.read(exploreSettingProvider.notifier).setSetting(val),
+    );
   }
 
-  void _showSimplePicker(BuildContext context, String title, List<String> options, dynamic provider, Function(WidgetRef, String) onSelect) {
+  void _showSimplePicker(
+    BuildContext context,
+    String title,
+    List<String> options,
+    dynamic provider,
+    Function(WidgetRef, String) onSelect,
+  ) {
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF1E1E1E),
       useSafeArea: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       builder: (_) => Consumer(
         builder: (context, ref, _) {
           final current = ref.watch(provider);
           return Padding(
-            padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(context).padding.bottom + 24),
+            padding: EdgeInsets.fromLTRB(
+              24,
+              24,
+              24,
+              MediaQuery.of(context).padding.bottom + 24,
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                  ),
+                ),
                 const SizedBox(height: 16),
                 Wrap(
                   spacing: 10,
@@ -503,12 +696,23 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                         Navigator.pop(context);
                       },
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 10,
+                        ),
                         decoration: BoxDecoration(
-                          color: active ? MatchFitTheme.accentGreen : const Color(0xFF2A2A2A),
+                          color: active
+                              ? MatchFitTheme.accentGreen
+                              : const Color(0xFF2A2A2A),
                           borderRadius: BorderRadius.circular(20),
                         ),
-                        child: Text(o, style: TextStyle(color: active ? Colors.black : Colors.white70, fontWeight: FontWeight.bold)),
+                        child: Text(
+                          o,
+                          style: TextStyle(
+                            color: active ? Colors.black : Colors.white70,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
                     );
                   }).toList(),
@@ -523,7 +727,13 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
   }
 
   void _showDistancePicker(BuildContext context) {
-    _showSimplePicker(context, 'Maksimum Mesafe', _distances, exploreDistanceProvider, (ref, val) => ref.read(exploreDistanceProvider.notifier).setDistance(val));
+    _showSimplePicker(
+      context,
+      'Maksimum Mesafe',
+      _distances,
+      exploreDistanceProvider,
+      (ref, val) => ref.read(exploreDistanceProvider.notifier).setDistance(val),
+    );
   }
 }
 
@@ -532,24 +742,49 @@ class _FilterChip extends StatelessWidget {
   final IconData icon;
   final bool isActive;
 
-  const _FilterChip({required this.label, required this.icon, required this.isActive});
+  const _FilterChip({
+    required this.label,
+    required this.icon,
+    required this.isActive,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: isActive ? MatchFitTheme.accentGreen.withOpacity(0.12) : const Color(0xFF242424),
+        color: isActive
+            ? MatchFitTheme.accentGreen.withOpacity(0.12)
+            : const Color(0xFF242424),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: isActive ? MatchFitTheme.accentGreen.withOpacity(0.4) : Colors.white.withOpacity(0.1)),
+        border: Border.all(
+          color: isActive
+              ? MatchFitTheme.accentGreen.withOpacity(0.4)
+              : Colors.white.withOpacity(0.1),
+        ),
       ),
       child: Row(
         children: [
-          Icon(icon, color: isActive ? MatchFitTheme.accentGreen : Colors.white60, size: 14),
+          Icon(
+            icon,
+            color: isActive ? MatchFitTheme.accentGreen : Colors.white60,
+            size: 14,
+          ),
           const SizedBox(width: 6),
-          Text(label, style: TextStyle(color: isActive ? MatchFitTheme.accentGreen : Colors.white60, fontWeight: FontWeight.bold, fontSize: 13)),
+          Text(
+            label,
+            style: TextStyle(
+              color: isActive ? MatchFitTheme.accentGreen : Colors.white60,
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
+            ),
+          ),
           const SizedBox(width: 4),
-          Icon(Icons.keyboard_arrow_down_rounded, color: isActive ? MatchFitTheme.accentGreen : Colors.white30, size: 14),
+          Icon(
+            Icons.keyboard_arrow_down_rounded,
+            color: isActive ? MatchFitTheme.accentGreen : Colors.white30,
+            size: 14,
+          ),
         ],
       ),
     );
@@ -574,13 +809,13 @@ class _MapSectionState extends ConsumerState<_MapSection> {
     final eventsAsync = ref.watch(exploreMatchesProvider);
     final distanceStr = ref.watch(exploreDistanceProvider);
     final expanded = widget.expanded;
-    
+
     double radiusInMeters = 5000;
     if (distanceStr == '< 10km') radiusInMeters = 10000;
     if (distanceStr == '< 20km') radiusInMeters = 20000;
     if (distanceStr == 'Farketmez') radiusInMeters = 0; // Don't show circle
 
-    final center = userLoc != null 
+    final center = userLoc != null
         ? LatLng(userLoc.latitude, userLoc.longitude)
         : const LatLng(41.0082, 28.9784); // Istanbul fallback
 
@@ -594,12 +829,17 @@ class _MapSectionState extends ConsumerState<_MapSection> {
           FlutterMap(
             options: MapOptions(
               initialCenter: center,
-              initialZoom: radiusInMeters > 0 ? (radiusInMeters > 10000 ? 10.5 : 12.0) : 12.0,
-              interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
+              initialZoom: radiusInMeters > 0
+                  ? (radiusInMeters > 10000 ? 10.5 : 12.0)
+                  : 12.0,
+              interactionOptions: const InteractionOptions(
+                flags: InteractiveFlag.all,
+              ),
             ),
             children: [
               TileLayer(
-                urlTemplate: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+                urlTemplate:
+                    'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
                 subdomains: const ['a', 'b', 'c', 'd'],
                 userAgentPackageName: 'com.matchfit.app',
               ),
@@ -608,7 +848,8 @@ class _MapSectionState extends ConsumerState<_MapSection> {
                   circles: [
                     CircleMarker(
                       point: center,
-                      radius: radiusInMeters.toDouble(), // This represents the search radius
+                      radius: radiusInMeters
+                          .toDouble(), // This represents the search radius
                       useRadiusInMeter: true,
                       color: MatchFitTheme.accentGreen.withOpacity(0.12),
                       borderColor: MatchFitTheme.accentGreen,
@@ -622,40 +863,72 @@ class _MapSectionState extends ConsumerState<_MapSection> {
                   if (userLoc != null)
                     Marker(
                       point: center,
-                      width: 40, height: 40,
+                      width: 40,
+                      height: 40,
                       child: Container(
                         decoration: BoxDecoration(
                           color: const Color(0xFF0052FF),
                           shape: BoxShape.circle,
                           border: Border.all(color: Colors.white, width: 2),
-                          boxShadow: [BoxShadow(color: const Color(0xFF0052FF).withOpacity(0.5), blurRadius: 8)],
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF0052FF).withOpacity(0.5),
+                              blurRadius: 8,
+                            ),
+                          ],
                         ),
-                        child: const Icon(Icons.person, color: Colors.white, size: 20),
+                        child: const Icon(
+                          Icons.person,
+                          color: Colors.white,
+                          size: 20,
+                        ),
                       ),
                     ),
                   // Event Markers
                   ...eventsAsync.maybeWhen(
-                    data: (events) => events.where((e) => e['lat'] != null && e['lng'] != null).map((e) {
-                      final sportName = e['sports']?['name'] as String? ?? '';
-                      final icon = _getSportIcon(sportName);
+                    data: (events) => events
+                        .where((e) => e['lat'] != null && e['lng'] != null)
+                        .map((e) {
+                          final sportName =
+                              e['sports']?['name'] as String? ?? '';
+                          final icon = _getSportIcon(sportName);
 
-                      return Marker(
-                        point: LatLng(e['lat'] as double, e['lng'] as double),
-                        width: 40, height: 40,
-                        child: GestureDetector(
-                          onTap: () => context.push('/event-detail', extra: e),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: MatchFitTheme.accentGreen,
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.black, width: 2),
-                              boxShadow: [BoxShadow(color: MatchFitTheme.accentGreen.withOpacity(0.5), blurRadius: 10)],
+                          return Marker(
+                            point: LatLng(
+                              e['lat'] as double,
+                              e['lng'] as double,
                             ),
-                            child: Icon(icon, color: Colors.black, size: 20),
-                          ),
-                        ),
-                      );
-                    }).toList(),
+                            width: 40,
+                            height: 40,
+                            child: GestureDetector(
+                              onTap: () =>
+                                  context.push('/event-detail', extra: e),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: MatchFitTheme.accentGreen,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.black,
+                                    width: 2,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: MatchFitTheme.accentGreen
+                                          .withOpacity(0.5),
+                                      blurRadius: 10,
+                                    ),
+                                  ],
+                                ),
+                                child: Icon(
+                                  icon,
+                                  color: Colors.black,
+                                  size: 20,
+                                ),
+                              ),
+                            ),
+                          );
+                        })
+                        .toList(),
                     orElse: () => [],
                   ),
                 ],
@@ -665,14 +938,19 @@ class _MapSectionState extends ConsumerState<_MapSection> {
           // Bottom fade (only when not expanded)
           if (!expanded)
             Positioned(
-              bottom: 0, left: 0, right: 0,
+              bottom: 0,
+              left: 0,
+              right: 0,
               child: Container(
                 height: 60,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [Colors.transparent, const Color(0xFF121212).withOpacity(0.9)],
+                    colors: [
+                      Colors.transparent,
+                      const Color(0xFF121212).withOpacity(0.9),
+                    ],
                   ),
                 ),
               ),
@@ -689,10 +967,17 @@ class _MapSectionState extends ConsumerState<_MapSection> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   shape: BoxShape.circle,
-                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.18), blurRadius: 8)],
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.18),
+                      blurRadius: 8,
+                    ),
+                  ],
                 ),
                 child: Icon(
-                  expanded ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded,
+                  expanded
+                      ? Icons.fullscreen_exit_rounded
+                      : Icons.fullscreen_rounded,
                   color: const Color(0xFF1A1A2E),
                   size: 20,
                 ),
@@ -709,21 +994,39 @@ class _MapSectionState extends ConsumerState<_MapSection> {
     if (s.contains('tenis')) return Icons.sports_tennis;
     if (s.contains('padel')) return Icons.sports_tennis;
     if (s.contains('basketbol')) return Icons.sports_basketball;
-    if (s.contains('futbol') || s.contains('halı saha')) return Icons.sports_soccer;
+    if (s.contains('futbol') || s.contains('halı saha'))
+      return Icons.sports_soccer;
     if (s.contains('voleybol')) return Icons.sports_volleyball;
-    if (s.contains('koşu') || s.contains('run') || s.contains('sprint')) return Icons.directions_run;
-    if (s.contains('bisiklet') || s.contains('cycling')) return Icons.directions_bike;
-    if (s.contains('fitness') || s.contains('antrenman') || s.contains('gym') || s.contains('ağırlık')) return Icons.fitness_center;
-    if (s.contains('yürüyüş') || s.contains('trekking') || s.contains('hiking')) return Icons.terrain;
+    if (s.contains('koşu') || s.contains('run') || s.contains('sprint'))
+      return Icons.directions_run;
+    if (s.contains('bisiklet') || s.contains('cycling'))
+      return Icons.directions_bike;
+    if (s.contains('fitness') ||
+        s.contains('antrenman') ||
+        s.contains('gym') ||
+        s.contains('ağırlık'))
+      return Icons.fitness_center;
+    if (s.contains('yürüyüş') || s.contains('trekking') || s.contains('hiking'))
+      return Icons.terrain;
     if (s.contains('yüzme') || s.contains('havuz')) return Icons.pool;
-    if (s.contains('sörf') || s.contains('kürek') || s.contains('paddle')) return Icons.waves;
-    if (s.contains('boks') || s.contains('mma') || s.contains('dövüş') || s.contains('jitsu')) return Icons.sports_mma;
-    if (s.contains('yoga') || s.contains('pilates') || s.contains('meditasyon')) return Icons.self_improvement;
+    if (s.contains('sörf') || s.contains('kürek') || s.contains('paddle'))
+      return Icons.waves;
+    if (s.contains('boks') ||
+        s.contains('mma') ||
+        s.contains('dövüş') ||
+        s.contains('jitsu'))
+      return Icons.sports_mma;
+    if (s.contains('yoga') || s.contains('pilates') || s.contains('meditasyon'))
+      return Icons.self_improvement;
     if (s.contains('kayak') || s.contains('snowboard')) return Icons.ac_unit;
     if (s.contains('tırmanış') || s.contains('boulder')) return Icons.landscape;
     if (s.contains('moto') || s.contains('atv')) return Icons.motorcycle;
-    if (s.contains('calisthenics') || s.contains('street') || s.contains('parkour')) return Icons.reorder;
-    if (s.contains('skate') || s.contains('roller')) return Icons.auto_awesome_motion;
+    if (s.contains('calisthenics') ||
+        s.contains('street') ||
+        s.contains('parkour'))
+      return Icons.reorder;
+    if (s.contains('skate') || s.contains('roller'))
+      return Icons.auto_awesome_motion;
     return Icons.sports; // Generic sports icon
   }
 }
@@ -739,12 +1042,13 @@ class _NearbyEventCard extends StatelessWidget {
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
       final diff = dt.difference(today).inDays;
-      
+
       String displayTime = '00:00';
       if (timeStr != null && timeStr.isNotEmpty) {
         final parts = timeStr.split(':');
         if (parts.length >= 2) {
-          displayTime = '${parts[0].padLeft(2, '0')}:${parts[1].padLeft(2, '0')}';
+          displayTime =
+              '${parts[0].padLeft(2, '0')}:${parts[1].padLeft(2, '0')}';
         }
       }
 
@@ -757,8 +1061,19 @@ class _NearbyEventCard extends StatelessWidget {
   }
 
   static const _months = [
-    '', 'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
-    'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'
+    '',
+    'Ocak',
+    'Şubat',
+    'Mart',
+    'Nisan',
+    'Mayıs',
+    'Haziran',
+    'Temmuz',
+    'Ağustos',
+    'Eylül',
+    'Ekim',
+    'Kasım',
+    'Aralık',
   ];
 
   @override
@@ -766,8 +1081,6 @@ class _NearbyEventCard extends StatelessWidget {
     final sport = event['sports']?['name'] ?? 'Spor';
     final title = event['title'] ?? 'Etkinlik';
     final location = event['location_name'] ?? 'Konum belirtilmedi';
-    final host = event['profiles']?['full_name'] ?? 'Bir Kullanıcı';
-    
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
@@ -782,14 +1095,21 @@ class _NearbyEventCard extends StatelessWidget {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: MatchFitTheme.accentGreen.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   sport.toUpperCase(),
-                  style: const TextStyle(color: MatchFitTheme.accentGreen, fontSize: 10, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    color: MatchFitTheme.accentGreen,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
               const Spacer(),
@@ -802,11 +1122,22 @@ class _NearbyEventCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          Text(title, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+          Text(
+            title,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           const SizedBox(height: 6),
           Row(
             children: [
-              const Icon(Icons.location_on_outlined, color: Colors.white38, size: 14),
+              const Icon(
+                Icons.location_on_outlined,
+                color: Colors.white38,
+                size: 14,
+              ),
               const SizedBox(width: 4),
               Expanded(
                 child: Text(
@@ -825,7 +1156,11 @@ class _NearbyEventCard extends StatelessWidget {
             children: [
               Text(
                 _formatDate(event['event_date'], event['start_time']),
-                style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500),
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
               const Spacer(),
               ElevatedButton(
@@ -834,10 +1169,18 @@ class _NearbyEventCard extends StatelessWidget {
                   backgroundColor: MatchFitTheme.accentGreen,
                   foregroundColor: Colors.black,
                   minimumSize: const Size(80, 36),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                   elevation: 0,
                 ),
-                child: Text(AppLocalizations.of(context).details.toUpperCase(), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                child: Text(
+                  AppLocalizations.of(context).details.toUpperCase(),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ],
           ),

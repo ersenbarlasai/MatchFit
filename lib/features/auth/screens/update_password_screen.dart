@@ -9,7 +9,8 @@ class UpdatePasswordScreen extends ConsumerStatefulWidget {
   const UpdatePasswordScreen({super.key});
 
   @override
-  ConsumerState<UpdatePasswordScreen> createState() => _UpdatePasswordScreenState();
+  ConsumerState<UpdatePasswordScreen> createState() =>
+      _UpdatePasswordScreenState();
 }
 
 class _UpdatePasswordScreenState extends ConsumerState<UpdatePasswordScreen> {
@@ -19,29 +20,36 @@ class _UpdatePasswordScreenState extends ConsumerState<UpdatePasswordScreen> {
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
 
+  @override
+  void dispose() {
+    _passwordController.dispose();
+    _confirmController.dispose();
+    super.dispose();
+  }
+
   Future<void> _submit() async {
     final t = AppLocalizations.of(context);
     final password = _passwordController.text.trim();
     final confirm = _confirmController.text.trim();
 
     if (password.isEmpty || confirm.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(t.pleaseFillBothFields)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(t.pleaseFillBothFields)));
       return;
     }
 
     if (password != confirm) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(t.passwordsDontMatch)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(t.passwordsDontMatch)));
       return;
     }
 
     if (password.length < 8) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(t.passwordMinLength)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(t.passwordMinLength)));
       return;
     }
 
@@ -49,18 +57,18 @@ class _UpdatePasswordScreenState extends ConsumerState<UpdatePasswordScreen> {
     try {
       final authRepo = ref.read(authRepositoryProvider);
       await authRepo.updatePassword(password);
-      
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(t.passwordUpdated)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(t.passwordUpdated)));
         context.go('/login');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${t.error}: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -76,7 +84,11 @@ class _UpdatePasswordScreenState extends ConsumerState<UpdatePasswordScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
+          icon: const Icon(
+            Icons.arrow_back_ios_new,
+            color: Colors.white,
+            size: 20,
+          ),
           onPressed: () => context.go('/login'),
         ),
       ),
@@ -87,7 +99,7 @@ class _UpdatePasswordScreenState extends ConsumerState<UpdatePasswordScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 20),
-              
+
               // Title
               Text(
                 t.createNewPassword,
@@ -99,7 +111,7 @@ class _UpdatePasswordScreenState extends ConsumerState<UpdatePasswordScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              
+
               // Subtitle
               Text(
                 t.updatePasswordSubtitle,
@@ -110,7 +122,7 @@ class _UpdatePasswordScreenState extends ConsumerState<UpdatePasswordScreen> {
                 ),
               ),
               const SizedBox(height: 40),
-              
+
               // New Password Field
               _buildTextField(
                 controller: _passwordController,
@@ -119,10 +131,12 @@ class _UpdatePasswordScreenState extends ConsumerState<UpdatePasswordScreen> {
                 onSuffixTap: () {
                   setState(() => _obscurePassword = !_obscurePassword);
                 },
-                suffixIcon: _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                suffixIcon: _obscurePassword
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
               ),
               const SizedBox(height: 16),
-              
+
               // Confirm Password Field
               _buildTextField(
                 controller: _confirmController,
@@ -131,11 +145,13 @@ class _UpdatePasswordScreenState extends ConsumerState<UpdatePasswordScreen> {
                 onSuffixTap: () {
                   setState(() => _obscureConfirm = !_obscureConfirm);
                 },
-                suffixIcon: _obscureConfirm ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                suffixIcon: _obscureConfirm
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
               ),
-              
+
               const Spacer(),
-              
+
               // Security Tip
               Container(
                 padding: const EdgeInsets.all(20),
@@ -146,7 +162,11 @@ class _UpdatePasswordScreenState extends ConsumerState<UpdatePasswordScreen> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.lock_outline, color: MatchFitTheme.accentGreen, size: 24),
+                    const Icon(
+                      Icons.lock_outline,
+                      color: MatchFitTheme.accentGreen,
+                      size: 24,
+                    ),
                     const SizedBox(width: 16),
                     Expanded(
                       child: Column(
@@ -154,12 +174,20 @@ class _UpdatePasswordScreenState extends ConsumerState<UpdatePasswordScreen> {
                         children: [
                           Text(
                             t.securityTip,
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                            ),
                           ),
                           const SizedBox(height: 4),
                           Text(
                             t.securityTipDesc,
-                            style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 13, height: 1.4),
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.6),
+                              fontSize: 13,
+                              height: 1.4,
+                            ),
                           ),
                         ],
                       ),
@@ -167,9 +195,9 @@ class _UpdatePasswordScreenState extends ConsumerState<UpdatePasswordScreen> {
                   ],
                 ),
               ),
-              
+
               const SizedBox(height: 24),
-              
+
               // Update Password Button
               ElevatedButton(
                 onPressed: _isLoading ? null : _submit,
@@ -186,12 +214,22 @@ class _UpdatePasswordScreenState extends ConsumerState<UpdatePasswordScreen> {
                     ? const SizedBox(
                         height: 20,
                         width: 20,
-                        child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2),
+                        child: CircularProgressIndicator(
+                          color: Colors.black,
+                          strokeWidth: 2,
+                        ),
                       )
                     : Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Text(t.updatePassword, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, letterSpacing: 0.5)),
+                          Text(
+                            t.updatePassword,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w900,
+                              fontSize: 15,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
                           const SizedBox(width: 8),
                           const Icon(Icons.arrow_forward, size: 20),
                         ],
@@ -218,7 +256,10 @@ class _UpdatePasswordScreenState extends ConsumerState<UpdatePasswordScreen> {
       style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
       decoration: InputDecoration(
         hintText: hintText,
-        hintStyle: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 15),
+        hintStyle: TextStyle(
+          color: Colors.white.withOpacity(0.4),
+          fontSize: 15,
+        ),
         floatingLabelBehavior: FloatingLabelBehavior.never,
         filled: true,
         fillColor: const Color(0xFF222222),
@@ -226,10 +267,17 @@ class _UpdatePasswordScreenState extends ConsumerState<UpdatePasswordScreen> {
           borderRadius: BorderRadius.circular(24),
           borderSide: BorderSide.none,
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 20,
+          vertical: 18,
+        ),
         suffixIcon: suffixIcon != null
             ? IconButton(
-                icon: Icon(suffixIcon, color: Colors.white.withOpacity(0.6), size: 22),
+                icon: Icon(
+                  suffixIcon,
+                  color: Colors.white.withOpacity(0.6),
+                  size: 22,
+                ),
                 onPressed: onSuffixTap,
               )
             : null,

@@ -18,12 +18,20 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   final _bioController = TextEditingController();
   bool _isLoading = false;
 
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _cityController.dispose();
+    _bioController.dispose();
+    super.dispose();
+  }
+
   Future<void> _saveProfile() async {
     final t = AppLocalizations.of(context);
     if (_nameController.text.isEmpty || _cityController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(t.pleaseEnterNameCity)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(t.pleaseEnterNameCity)));
       return;
     }
 
@@ -37,13 +45,13 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
         'trust_score': 50, // default trust score
         'status': 'active',
       });
-      
+
       if (mounted) context.push('/sport-interests');
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${t.profileSaveError}: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('${t.profileSaveError}: $e')));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -56,7 +64,10 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Text(t.completeProfile, style: const TextStyle(fontWeight: FontWeight.bold)),
+        title: Text(
+          t.completeProfile,
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
         elevation: 0,
         backgroundColor: Colors.transparent,
       ),
@@ -79,7 +90,11 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                     child: CircleAvatar(
                       radius: 18,
                       backgroundColor: MatchFitTheme.accentGreen,
-                      child: Icon(Icons.camera_alt, size: 18, color: Colors.black),
+                      child: Icon(
+                        Icons.camera_alt,
+                        size: 18,
+                        color: Colors.black,
+                      ),
                     ),
                   ),
                 ],
@@ -116,9 +131,22 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
             const SizedBox(height: 48),
             ElevatedButton(
               onPressed: _isLoading ? null : _saveProfile,
-              child: _isLoading 
-                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2))
-                : Text(t.continueToSportSelection, style: const TextStyle(letterSpacing: 1.5, fontWeight: FontWeight.bold)),
+              child: _isLoading
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        color: Colors.black,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : Text(
+                      t.continueToSportSelection,
+                      style: const TextStyle(
+                        letterSpacing: 1.5,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
             ),
           ],
         ),

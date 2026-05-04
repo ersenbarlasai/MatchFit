@@ -4,94 +4,152 @@ import 'package:go_router/go_router.dart';
 import 'package:matchfit/core/theme.dart';
 import 'package:matchfit/core/widgets/avatar_widget.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'dart:math' as math;
 import '../../auth/repositories/auth_repository.dart';
 import '../repositories/social_repository.dart';
 import '../models/trust_system.dart';
 import 'package:matchfit/core/providers/profile_provider.dart';
 import 'package:matchfit/core/l10n/app_localizations.dart';
+import '../../events/repositories/event_repository.dart';
 
 // ── Providers ──────────────────────────────────────────────────────
 
-final userSportsPreferencesProvider = FutureProvider.autoDispose.family<List<Map<String, dynamic>>, String?>((ref, userId) async {
-  final targetId = userId ?? ref.read(authRepositoryProvider).currentUser?.id;
-  if (targetId == null) return [];
-  
-  final res = await Supabase.instance.client
-      .from('user_sports_preferences')
-      .select('sport_id, skill_level, sports(name)')
-      .eq('user_id', targetId);
-  return List<Map<String, dynamic>>.from(res);
-});
+final userSportsPreferencesProvider = FutureProvider.autoDispose
+    .family<List<Map<String, dynamic>>, String?>((ref, userId) async {
+      final targetId =
+          userId ?? ref.read(authRepositoryProvider).currentUser?.id;
+      if (targetId == null) return [];
 
-final profileDataProvider = FutureProvider.autoDispose.family<Map<String, dynamic>, String?>((ref, userId) async {
-  final targetId = userId ?? ref.read(authRepositoryProvider).currentUser?.id;
-  if (targetId == null) return {};
-  
-  final sb = Supabase.instance.client;
+      final res = await Supabase.instance.client
+          .from('user_sports_preferences')
+          .select('sport_id, skill_level, sports(name)')
+          .eq('user_id', targetId);
+      return List<Map<String, dynamic>>.from(res);
+    });
 
-  final profile = await sb.from('profiles').select('full_name, trust_score, avatar_url, accepts_partnership, city, district, created_at').eq('id', targetId).maybeSingle();
-  final hosted = await sb.from('events').select('id, status').eq('host_id', targetId);
-  final joined = await sb.from('event_participants').select('id').eq('user_id', targetId);
-  final posts  = await sb.from('posts').select('id').eq('user_id', targetId);
+final profileDataProvider = FutureProvider.autoDispose
+    .family<Map<String, dynamic>, String?>((ref, userId) async {
+      ref.watch(eventChangeProvider); // Watch for global changes
+      final targetId =
+          userId ?? ref.read(authRepositoryProvider).currentUser?.id;
+      if (targetId == null) return {};
 
-  final hostedList = List<Map<String, dynamic>>.from(hosted);
-  final completed = hostedList.where((e) => e['status'] == 'completed').length;
-  final completionPct = hostedList.isEmpty ? 100 : ((completed / hostedList.length) * 100).round();
+      final sb = Supabase.instance.client;
 
-  // Extract year from created_at
-  String joinedYear = '2024';
-  if (profile?['created_at'] != null) {
-    try {
-      joinedYear = DateTime.parse(profile!['created_at']).year.toString();
-    } catch (_) {}
-  }
+      Map<String, dynamic>? profile;
+      try {
+        profile = await sb
+            .from('profiles')
+            .select(
+              'full_name, trust_score, avatar_url, cover_url, accepts_partnership, city, district, created_at',
+            )
+            .eq('id', targetId)
+            .maybeSingle();
+      } catch (e) {
+        // If cover_url doesn't exist yet, fallback to a query without it
+        profile = await sb
+            .from('profiles')
+            .select(
+              'full_name, trust_score, avatar_url, accepts_partnership, city, district, created_at',
+            )
+            .eq('id', targetId)
+            .maybeSingle();
+      }
 
-  return {
-    'full_name': profile?['full_name'] ?? 'Player',
-    'trust_score': profile?['trust_score'] ?? 100,
-    'avatar_url': profile?['avatar_url'] as String? ?? '',
-    'accepts_partnership': profile?['accepts_partnership'] ?? true,
-    'city': profile?['city'] ?? 'Bilinmiyor',
-    'district': profile?['district'] ?? '',
-    'joined_year': joinedYear,
-    'user_id': targetId,
-    'events_joined': (joined as List).length,
-    'events_hosted': hostedList.length,
-    'completion_pct': completionPct,
-    'posts_count': (posts as List).length,
-  };
-});
+      final hosted = await sb
+          .from('events')
+          .select('id, status')
+          .eq('host_id', targetId);
+      final joined = await sb
+          .from('event_participants')
+          .select('id')
+          .eq('user_id', targetId)
+          .eq('status', 'joined');
+      final posts = await sb.from('posts').select('id').eq('user_id', targetId);
 
-final userPostsProvider = FutureProvider.autoDispose.family<List<Map<String, dynamic>>, String?>((ref, userId) async {
-  final targetId = userId ?? ref.read(authRepositoryProvider).currentUser?.id;
-  if (targetId == null) return [];
+      final hostedList = List<Map<String, dynamic>>.from(hosted);
+      final completed = hostedList
+          .where((e) => e['status'] == 'completed')
+          .length;
+      final completionPct = hostedList.isEmpty
+          ? 100
+          : ((completed / hostedList.length) * 100).round();
 
-  final response = await Supabase.instance.client
-      .from('posts')
-      .select('*, events(title, sports(name))')
-      .eq('user_id', targetId)
-      .order('created_at', ascending: false);
-  
-  return List<Map<String, dynamic>>.from(response);
-});
+      // Extract year from created_at
+      String joinedYear = '2024';
+      if (profile?['created_at'] != null) {
+        try {
+          joinedYear = DateTime.parse(profile!['created_at']).year.toString();
+        } catch (_) {}
+      }
 
-final userPastEventsProvider = FutureProvider.autoDispose.family<List<Map<String, dynamic>>, String?>((ref, userId) async {
-  final targetId = userId ?? ref.read(authRepositoryProvider).currentUser?.id;
-  if (targetId == null) return [];
+      final followersRes = await sb
+          .from('user_relationships')
+          .select('id')
+          .eq('receiver_id', targetId)
+          .eq('status', 'following');
+      final followingRes = await sb
+          .from('user_relationships')
+          .select('id')
+          .eq('sender_id', targetId)
+          .eq('status', 'following');
 
-  final response = await Supabase.instance.client
-      .from('event_participants')
-      .select('events(*, sports(name), profiles(full_name, avatar_url))')
-      .eq('user_id', targetId)
-      .eq('status', 'joined')
-      .lt('events.event_date', DateTime.now().toIso8601String())
-      .order('created_at', ascending: false);
-  
-  // Filter out null events (if any inner join issue)
-  final list = List<Map<String, dynamic>>.from(response);
-  return list.where((item) => item['events'] != null).map((item) => item['events'] as Map<String, dynamic>).toList();
-});
+      return {
+        'full_name': profile?['full_name'] ?? 'Player',
+        'trust_score': profile?['trust_score'] ?? 0,
+        'avatar_url': profile?['avatar_url'] as String? ?? '',
+        'cover_url': profile != null && profile.containsKey('cover_url')
+            ? profile['cover_url'] as String?
+            : null,
+        'accepts_partnership': profile?['accepts_partnership'] ?? true,
+        'city': profile?['city'] ?? 'Bilinmiyor',
+        'district': profile?['district'] ?? '',
+        'joined_year': joinedYear,
+        'user_id': targetId,
+        'events_joined': (joined as List).length,
+        'events_hosted': hostedList.length,
+        'completion_pct': completionPct,
+        'posts_count': (posts as List).length,
+        'followers_count': (followersRes as List).length,
+        'following_count': (followingRes as List).length,
+      };
+    });
+
+final userPostsProvider = FutureProvider.autoDispose
+    .family<List<Map<String, dynamic>>, String?>((ref, userId) async {
+      final targetId =
+          userId ?? ref.read(authRepositoryProvider).currentUser?.id;
+      if (targetId == null) return [];
+
+      final response = await Supabase.instance.client
+          .from('posts')
+          .select('*, events(title, sports(name))')
+          .eq('user_id', targetId)
+          .order('created_at', ascending: false);
+
+      return List<Map<String, dynamic>>.from(response);
+    });
+
+final userPastEventsProvider = FutureProvider.autoDispose
+    .family<List<Map<String, dynamic>>, String?>((ref, userId) async {
+      final targetId =
+          userId ?? ref.read(authRepositoryProvider).currentUser?.id;
+      if (targetId == null) return [];
+
+      final response = await Supabase.instance.client
+          .from('event_participants')
+          .select('events(*, sports(name), profiles(full_name, avatar_url))')
+          .eq('user_id', targetId)
+          .eq('status', 'joined')
+          .lt('events.event_date', DateTime.now().toIso8601String())
+          .order('created_at', ascending: false);
+
+      // Filter out null events (if any inner join issue)
+      final list = List<Map<String, dynamic>>.from(response);
+      return list
+          .where((item) => item['events'] != null)
+          .map((item) => item['events'] as Map<String, dynamic>)
+          .toList();
+    });
 
 // ── Profile Screen ─────────────────────────────────────────────────
 
@@ -120,17 +178,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     super.dispose();
   }
 
-  String _initials(String name) {
-    final parts = name.trim().split(' ').where((s) => s.isNotEmpty).toList();
-    if (parts.isEmpty) return '?';
-    if (parts.length == 1) return parts[0][0].toUpperCase();
-    return '${parts[0][0]}${parts[parts.length - 1][0]}'.toUpperCase();
+  String _formatCount(int count) {
+    if (count >= 1000000) {
+      return '${(count / 1000000).toStringAsFixed(1).replaceAll('.0', '')}m';
+    } else if (count >= 1000) {
+      return '${(count / 1000).toStringAsFixed(1).replaceAll('.0', '')}k';
+    }
+    return count.toString();
   }
 
   @override
   Widget build(BuildContext context) {
     final dataAsync = ref.watch(profileDataProvider(widget.userId));
-    final relationshipAsync = widget.userId != null 
+    final relationshipAsync = widget.userId != null
         ? ref.watch(relationshipStatusProvider(widget.userId!))
         : const AsyncValue.data(null);
     final isBlockedAsync = widget.userId != null
@@ -150,13 +210,26 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               ? ref.watch(partnershipStatusProvider(widget.userId!))
               : const AsyncValue.data(null);
 
-          final trustAsync = ref.watch(trustScoreProvider(widget.userId ?? ref.read(authRepositoryProvider).currentUser?.id ?? ''));
-          final earnedKeys = trustAsync.whenData((d) => d.earnedBadgeKeys).asData?.value ?? const <String>[];
+          final trustAsync = ref.watch(
+            trustScoreProvider(
+              widget.userId ??
+                  ref.read(authRepositoryProvider).currentUser?.id ??
+                  '',
+            ),
+          );
+          final earnedKeys =
+              trustAsync.whenData((d) => d.earnedBadgeKeys).asData?.value ??
+              const <String>[];
 
           return dataAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, _) => Center(child: Text('Error: $e')),
-            data: (data) => _buildBody(data, relationshipAsync.value, partnershipAsync.value, earnedKeys),
+            data: (data) => _buildBody(
+              data,
+              relationshipAsync.value,
+              partnershipAsync.value,
+              earnedKeys,
+            ),
           );
         },
       ),
@@ -170,7 +243,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
+            icon: const Icon(
+              Icons.arrow_back_ios_new,
+              color: Colors.white,
+              size: 20,
+            ),
             onPressed: () => context.pop(),
           ),
         ),
@@ -179,13 +256,28 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.block_flipped, size: 64, color: Colors.white.withOpacity(0.1)),
+                Icon(
+                  Icons.block_flipped,
+                  size: 64,
+                  color: Colors.white.withOpacity(0.1),
+                ),
                 const SizedBox(height: 16),
-                const Text('User not found',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+                const Text(
+                  'User not found',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                  ),
+                ),
                 const SizedBox(height: 8),
-                Text('This profile is private or you have been blocked.',
-                    style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 13)),
+                Text(
+                  'This profile is private or you have been blocked.',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.4),
+                    fontSize: 13,
+                  ),
+                ),
               ],
             ),
           ),
@@ -194,53 +286,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     );
   }
 
-  Future<bool?> _showLogoutDialog(BuildContext context) {
-    return showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(AppLocalizations.of(context).logOut, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        content: Text(
-          'Hesabınızdan çıkış yapmak istediğinize emin misiniz?',
-          style: TextStyle(color: Colors.white.withOpacity(0.7), height: 1.5),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(AppLocalizations.of(context).cancel, style: TextStyle(color: Colors.white.withOpacity(0.5))),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFF4B4B),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            child: Text(AppLocalizations.of(context).logOut, style: const TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _handleLogout() async {
-    final confirmed = await _showLogoutDialog(context);
-    if (confirmed == true) {
-      await ref.read(authRepositoryProvider).signOut();
-      if (mounted) {
-        context.go('/login');
-      }
-    }
-  }
-
   Future<bool?> _showBlockDialog(BuildContext context, String name) {
     return showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E1E),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(AppLocalizations.of(context).block, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: Text(
+          AppLocalizations.of(context).block,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         content: Text(
           'Are you sure you want to block $name?\n\nThey will no longer be able to view your profile or events.',
           style: TextStyle(color: Colors.white.withOpacity(0.7), height: 1.5),
@@ -248,41 +306,50 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text(AppLocalizations.of(context).cancel, style: TextStyle(color: Colors.white.withOpacity(0.5))),
+            child: Text(
+              AppLocalizations.of(context).cancel,
+              style: TextStyle(color: Colors.white.withOpacity(0.5)),
+            ),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red.shade800,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
-            child: Text(AppLocalizations.of(context).block, style: const TextStyle(fontWeight: FontWeight.bold)),
+            child: Text(
+              AppLocalizations.of(context).block,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildBody(Map<String, dynamic> data, String? relationshipStatus, String? partnershipStatus, List<String> earnedKeys) {
+  Widget _buildBody(
+    Map<String, dynamic> data,
+    String? relationshipStatus,
+    String? partnershipStatus,
+    List<String> earnedKeys,
+  ) {
     final name = data['full_name'] as String;
-    final trustScore = int.tryParse(data['trust_score']?.toString() ?? '') ?? 100;
+    final trustScore = int.tryParse(data['trust_score']?.toString() ?? '') ?? 0;
     final joined = int.tryParse(data['events_joined']?.toString() ?? '') ?? 0;
     final hosted = int.tryParse(data['events_hosted']?.toString() ?? '') ?? 0;
-    final completion = int.tryParse(data['completion_pct']?.toString() ?? '') ?? 0;
     final userId = data['user_id'] as String? ?? '';
-    final isMe = widget.userId == null || widget.userId == ref.read(authRepositoryProvider).currentUser?.id;
-    final acceptsPartnership = data['accepts_partnership'] == true;
+    final isMe =
+        widget.userId == null ||
+        widget.userId == ref.read(authRepositoryProvider).currentUser?.id;
 
     // Use local state if user already changed avatar, else use DB value
     String avatarUrl = _avatarUrl ?? (data['avatar_url'] as String? ?? '');
     if (avatarUrl.contains('pravatar.cc')) {
       avatarUrl = 'https://api.dicebear.com/7.x/avataaars/png?seed=$userId';
     }
-    
-    final incomingRequestAsync = userId.isNotEmpty 
-        ? ref.watch(incomingFollowRequestProvider(userId))
-        : const AsyncValue.data(false);
 
     return NestedScrollView(
       headerSliverBuilder: (context, _) => [
@@ -291,7 +358,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           backgroundColor: const Color(0xFF121212),
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
+            icon: const Icon(
+              Icons.arrow_back_ios_new,
+              color: Colors.white,
+              size: 20,
+            ),
             onPressed: () {
               if (context.canPop()) {
                 context.pop();
@@ -300,8 +371,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               }
             },
           ),
-          title: Text(isMe ? AppLocalizations.of(context).profile : 'Oyuncu Profili',
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
+          title: Text(
+            isMe ? AppLocalizations.of(context).profile : 'Oyuncu Profili',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w900,
+              fontSize: 18,
+            ),
+          ),
           actions: [
             if (isMe)
               IconButton(
@@ -316,12 +393,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   return PopupMenuButton<String>(
                     icon: const Icon(Icons.more_vert, color: Colors.white),
                     color: const Color(0xFF1E1E1E),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                     onSelected: (value) async {
                       if (value == 'block') {
                         final confirmed = await _showBlockDialog(context, name);
                         if (confirmed == true) {
-                          await ref.read(socialRepositoryProvider).blockUser(userId);
+                          await ref
+                              .read(socialRepositoryProvider)
+                              .blockUser(userId);
                           ref.invalidate(isBlockingProvider(userId));
                           ref.invalidate(isBlockedByProvider(userId));
                           if (mounted) {
@@ -334,7 +415,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                           }
                         }
                       } else if (value == 'unblock') {
-                        await ref.read(socialRepositoryProvider).unblockUser(userId);
+                        await ref
+                            .read(socialRepositoryProvider)
+                            .unblockUser(userId);
                         ref.invalidate(isBlockingProvider(userId));
                         ref.invalidate(isBlockedByProvider(userId));
                         if (mounted) {
@@ -350,9 +433,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                           value: 'unblock',
                           child: Row(
                             children: [
-                              Icon(Icons.lock_open_outlined, color: Colors.white70, size: 18),
+                              Icon(
+                                Icons.lock_open_outlined,
+                                color: Colors.white70,
+                                size: 18,
+                              ),
                               const SizedBox(width: 12),
-                              const Text('Engeli Kaldır', style: TextStyle(color: Colors.white70)),
+                              const Text(
+                                'Engeli Kaldır',
+                                style: TextStyle(color: Colors.white70),
+                              ),
                             ],
                           ),
                         )
@@ -361,9 +451,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                           value: 'block',
                           child: Row(
                             children: [
-                              const Icon(Icons.block_outlined, color: Colors.redAccent, size: 18),
+                              const Icon(
+                                Icons.block_outlined,
+                                color: Colors.redAccent,
+                                size: 18,
+                              ),
                               const SizedBox(width: 12),
-                              Text(AppLocalizations.of(context).block, style: const TextStyle(color: Colors.redAccent)),
+                              Text(
+                                AppLocalizations.of(context).block,
+                                style: const TextStyle(color: Colors.redAccent),
+                              ),
                             ],
                           ),
                         ),
@@ -393,26 +490,40 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                         clipBehavior: Clip.none,
                         children: [
                           // Cover Image
-                          Container(
-                            height: 140,
-                            width: double.infinity,
-                            decoration: BoxDecoration(
-                              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-                              gradient: LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [
-                                  Colors.blue.shade900,
-                                  Colors.blue.shade600,
-                                ],
+                          (() {
+                            final coverUrl = data['cover_url'] as String?;
+                            return Container(
+                              height: 140,
+                              width: double.infinity,
+                              decoration: BoxDecoration(
+                                borderRadius: const BorderRadius.vertical(
+                                  top: Radius.circular(24),
+                                ),
+                                gradient: coverUrl == null
+                                    ? LinearGradient(
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                        colors: [
+                                          Colors.blue.shade900,
+                                          Colors.blue.shade600,
+                                        ],
+                                      )
+                                    : null,
+                                image: coverUrl != null
+                                    ? DecorationImage(
+                                        image: NetworkImage(coverUrl),
+                                        fit: BoxFit.cover,
+                                      )
+                                    : const DecorationImage(
+                                        image: NetworkImage(
+                                          'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=1000&auto=format&fit=crop',
+                                        ),
+                                        fit: BoxFit.cover,
+                                        opacity: 0.4,
+                                      ),
                               ),
-                              image: const DecorationImage(
-                                image: NetworkImage('https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=1000&auto=format&fit=crop'),
-                                fit: BoxFit.cover,
-                                opacity: 0.4,
-                              ),
-                            ),
-                          ),
+                            );
+                          })(),
                           // Avatar
                           Positioned(
                             bottom: -40,
@@ -428,38 +539,31 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                   child: AvatarWidget(
                                     name: name,
                                     radius: 50,
-                                    avatarUrl: avatarUrl.isNotEmpty ? avatarUrl : null,
+                                    avatarUrl: avatarUrl.isNotEmpty
+                                        ? avatarUrl
+                                        : null,
                                     editable: isMe,
                                     userId: userId,
                                     onUploaded: (url) {
                                       setState(() => _avatarUrl = url);
-                                      ref.invalidate(currentUserProfileProvider);
-                                      ref.invalidate(profileDataProvider(userId));
+                                      ref.invalidate(
+                                        currentUserProfileProvider,
+                                      );
+                                      ref.invalidate(
+                                        profileDataProvider(userId),
+                                      );
                                     },
                                   ),
                                 ),
-                                // Verified Badge (Only if not me, to avoid overlap with camera icon)
-                                if (!isMe)
-                                  Positioned(
-                                    right: 0,
-                                    bottom: 0,
-                                    child: Container(
-                                      padding: const EdgeInsets.all(4),
-                                      decoration: const BoxDecoration(
-                                        color: MatchFitTheme.accentGreen,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: const Icon(Icons.check, size: 14, color: Colors.black),
-                                    ),
-                                  ),
+                                // Badge removed per user feedback
                               ],
                             ),
                           ),
                         ],
                       ),
-                      
+
                       const SizedBox(height: 12),
-                      
+
                       // 2. Info Section (Name, Location, Buttons)
                       Padding(
                         padding: const EdgeInsets.fromLTRB(135, 0, 20, 20),
@@ -470,44 +574,89 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                               children: [
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Row(
                                         children: [
-                                          Text(name.split(' ').first,
-                                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 24)),
+                                          Text(
+                                            name,
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w900,
+                                              fontSize: 24,
+                                            ),
+                                          ),
                                           const SizedBox(width: 8),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                            decoration: BoxDecoration(
-                                              color: Colors.blue.withOpacity(0.15),
-                                              borderRadius: BorderRadius.circular(12),
-                                            ),
-                                            child: const Row(
-                                              children: [
-                                                Icon(Icons.emoji_events_outlined, size: 12, color: Colors.blue),
-                                                SizedBox(width: 4),
-                                                Text('Elite Player', style: TextStyle(color: Colors.blue, fontSize: 10, fontWeight: FontWeight.bold)),
-                                              ],
-                                            ),
+                                          Builder(
+                                            builder: (context) {
+                                              final info = getTrustLevelInfo(
+                                                trustScore,
+                                              );
+                                              return Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 4,
+                                                    ),
+                                                decoration: BoxDecoration(
+                                                  color: info.color.withOpacity(
+                                                    0.15,
+                                                  ),
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                ),
+                                                child: Row(
+                                                  children: [
+                                                    Icon(
+                                                      Icons
+                                                          .emoji_events_outlined,
+                                                      size: 12,
+                                                      color: info.color,
+                                                    ),
+                                                    const SizedBox(width: 4),
+                                                    Text(
+                                                      info.label,
+                                                      style: TextStyle(
+                                                        color: info.color,
+                                                        fontSize: 10,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              );
+                                            },
                                           ),
                                         ],
                                       ),
                                       const SizedBox(height: 4),
-                                      Text('${data['city']}, ${data['district']} • Katıldı ${data['joined_year']}',
-                                          style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 13)),
+                                      Text(
+                                        '${data['city']}, ${data['district']} • ${data['joined_year']}',
+                                        style: TextStyle(
+                                          color: Colors.white.withOpacity(0.4),
+                                          fontSize: 13,
+                                        ),
+                                      ),
                                       const SizedBox(height: 8),
                                       // Mini Badges Row
                                       Wrap(
                                         spacing: 6,
-                                        children: kAllBadges.take(6).map((badge) {
-                                          final earned = earnedKeys.contains(badge.key);
+                                        children: kAllBadges.take(6).map((
+                                          badge,
+                                        ) {
+                                          final earned = earnedKeys.contains(
+                                            badge.key,
+                                          );
                                           return Opacity(
                                             opacity: earned ? 1.0 : 0.25,
                                             child: Icon(
                                               badge.icon,
                                               size: 14,
-                                              color: earned ? badge.color : Colors.white,
+                                              color: earned
+                                                  ? badge.color
+                                                  : Colors.white,
                                             ),
                                           );
                                         }).toList(),
@@ -515,33 +664,57 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                     ],
                                   ),
                                 ),
-                                
+
                                 // Follow Button (Only if not me)
                                 if (!isMe)
                                   ElevatedButton(
                                     onPressed: () async {
                                       if (relationshipStatus == 'following') {
-                                        await ref.read(socialRepositoryProvider).unfollowUser(userId);
-                                      } else if (relationshipStatus == 'pending') {
-                                        await ref.read(socialRepositoryProvider).unfollowUser(userId);
+                                        await ref
+                                            .read(socialRepositoryProvider)
+                                            .unfollowUser(userId);
+                                      } else if (relationshipStatus ==
+                                          'pending') {
+                                        await ref
+                                            .read(socialRepositoryProvider)
+                                            .unfollowUser(userId);
                                       } else {
-                                        await ref.read(socialRepositoryProvider).sendFollowRequest(userId);
+                                        await ref
+                                            .read(socialRepositoryProvider)
+                                            .sendFollowRequest(userId);
                                       }
-                                      ref.invalidate(relationshipStatusProvider(userId));
+                                      ref.invalidate(
+                                        relationshipStatusProvider(userId),
+                                      );
                                     },
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: relationshipStatus != 'following' 
-                                          ? MatchFitTheme.accentGreen 
+                                      backgroundColor:
+                                          relationshipStatus != 'following'
+                                          ? MatchFitTheme.accentGreen
                                           : const Color(0xFF2A2A2A),
-                                      foregroundColor: relationshipStatus != 'following' ? Colors.black : Colors.white,
-                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                                      foregroundColor:
+                                          relationshipStatus != 'following'
+                                          ? Colors.black
+                                          : Colors.white,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 0,
+                                      ),
                                       minimumSize: const Size(0, 36),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(18),
+                                      ),
                                       elevation: 0,
                                     ),
                                     child: Text(
-                                        relationshipStatus == 'following' ? 'Following' : 'Follow',
-                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                      relationshipStatus == 'following'
+                                          ? 'Following'
+                                          : 'Follow',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                      ),
+                                    ),
                                   ),
                               ],
                             ),
@@ -551,17 +724,52 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
 
                       // 3. Stats Bar
                       Container(
-                        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 16,
+                          horizontal: 24,
+                        ),
                         decoration: BoxDecoration(
-                          border: Border(top: BorderSide(color: Colors.white.withOpacity(0.05))),
+                          border: Border(
+                            top: BorderSide(
+                              color: Colors.white.withOpacity(0.05),
+                            ),
+                          ),
                         ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            _StatItem(value: '1.2k', label: 'FOLLOWERS'),
-                            _StatItem(value: '850', label: 'FOLLOWING'),
-                            _StatItem(value: '$joined', label: 'JOINED'),
-                            _StatItem(value: '$hosted', label: 'HOSTED'),
+                            _StatItem(
+                              value: _formatCount(data['followers_count'] ?? 0),
+                              label: 'TAKİPÇİ',
+                              onTap: () => context.push(
+                                '/connections',
+                                extra: {'userId': userId, 'initialTab': 0},
+                              ),
+                            ),
+                            _StatItem(
+                              value: _formatCount(data['following_count'] ?? 0),
+                              label: 'TAKİP',
+                              onTap: () => context.push(
+                                '/connections',
+                                extra: {'userId': userId, 'initialTab': 1},
+                              ),
+                            ),
+                            _StatItem(
+                              value: _formatCount(joined),
+                              label: 'KATILIM',
+                              onTap: () => context.push(
+                                '/user-events',
+                                extra: {'userId': userId, 'initialTab': 0},
+                              ),
+                            ),
+                            _StatItem(
+                              value: _formatCount(hosted),
+                              label: 'DÜZENLEME',
+                              onTap: () => context.push(
+                                '/user-events',
+                                extra: {'userId': userId, 'initialTab': 1},
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -577,12 +785,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   indicatorColor: MatchFitTheme.accentGreen,
                   indicatorWeight: 2.5,
                   indicatorSize: TabBarIndicatorSize.label,
-                  labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  labelStyle: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
                   tabs: const [
-                    Tab(text: 'Trust & Badges'),
-                    Tab(text: 'Interests'),
+                    Tab(text: 'Güven & Rozetler'),
+                    Tab(text: 'İlgi Alanları'),
                     Tab(text: 'Arkadaşlar'),
-                    Tab(text: 'My Posts'),
+                    Tab(text: 'Paylaşımlarım'),
                   ],
                 ),
                 const Divider(height: 1, color: Colors.white10),
@@ -603,7 +814,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     );
   }
 }
-
 
 // ── Trust Score Card 2.0 ──────────────────────────────────────────
 
@@ -632,7 +842,12 @@ class _Trust2Skeleton extends StatelessWidget {
         color: const Color(0xFF1A1A1A),
         borderRadius: BorderRadius.circular(20),
       ),
-      child: const Center(child: CircularProgressIndicator(color: MatchFitTheme.accentGreen, strokeWidth: 2)),
+      child: const Center(
+        child: CircularProgressIndicator(
+          color: MatchFitTheme.accentGreen,
+          strokeWidth: 2,
+        ),
+      ),
     );
   }
 }
@@ -665,13 +880,26 @@ class _Trust2CardContent extends StatelessWidget {
           // Header row
           Row(
             children: [
-              const Icon(Icons.shield_rounded, color: MatchFitTheme.accentGreen, size: 18),
+              const Icon(
+                Icons.shield_rounded,
+                color: MatchFitTheme.accentGreen,
+                size: 18,
+              ),
               const SizedBox(width: 8),
-              const Text('Güven Skoru',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+              const Text(
+                'Güven Skoru',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                ),
+              ),
               const Spacer(),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: lvl.color.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(20),
@@ -679,7 +907,11 @@ class _Trust2CardContent extends StatelessWidget {
                 ),
                 child: Text(
                   '${lvl.emoji} ${lvl.label}',
-                  style: TextStyle(color: lvl.color, fontWeight: FontWeight.w900, fontSize: 11),
+                  style: TextStyle(
+                    color: lvl.color,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 11,
+                  ),
                 ),
               ),
             ],
@@ -691,10 +923,20 @@ class _Trust2CardContent extends StatelessWidget {
             children: [
               Text(
                 '${data.total}',
-                style: TextStyle(color: lvl.color, fontWeight: FontWeight.w900, fontSize: 38),
+                style: TextStyle(
+                  color: lvl.color,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 38,
+                ),
               ),
-              Text(' / 100',
-                  style: TextStyle(color: Colors.white.withOpacity(0.3), fontWeight: FontWeight.bold, fontSize: 18)),
+              Text(
+                ' / 100',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.3),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 10),
@@ -722,11 +964,26 @@ class _Trust2CardContent extends StatelessWidget {
           const SizedBox(height: 14),
 
           // Sub scores
-          _SubScoreRow(label: 'Güvenilirlik', icon: Icons.shield_outlined, value: data.reliability, color: const Color(0xFF34D399)),
+          _SubScoreRow(
+            label: 'Güvenilirlik',
+            icon: Icons.shield_outlined,
+            value: data.reliability,
+            color: const Color(0xFF34D399),
+          ),
           const SizedBox(height: 8),
-          _SubScoreRow(label: 'Sosyal', icon: Icons.favorite_outline, value: data.social, color: const Color(0xFFA78BFA)),
+          _SubScoreRow(
+            label: 'Sosyal',
+            icon: Icons.favorite_outline,
+            value: data.social,
+            color: const Color(0xFFA78BFA),
+          ),
           const SizedBox(height: 8),
-          _SubScoreRow(label: 'Aktiflik', icon: Icons.bolt_outlined, value: data.activity, color: const Color(0xFF60A5FA)),
+          _SubScoreRow(
+            label: 'Aktiflik',
+            icon: Icons.bolt_outlined,
+            value: data.activity,
+            color: const Color(0xFF60A5FA),
+          ),
 
           // Next level hint
           if (data.level != TrustLevel.legend) ...[
@@ -739,7 +996,11 @@ class _Trust2CardContent extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.arrow_upward_rounded, color: nextLvl.color, size: 16),
+                  Icon(
+                    Icons.arrow_upward_rounded,
+                    color: nextLvl.color,
+                    size: 16,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: RichText(
@@ -748,11 +1009,16 @@ class _Trust2CardContent extends StatelessWidget {
                         children: [
                           TextSpan(
                             text: '${data.pointsToNextLevel} puan ',
-                            style: TextStyle(color: nextLvl.color, fontWeight: FontWeight.w900),
+                            style: TextStyle(
+                              color: nextLvl.color,
+                              fontWeight: FontWeight.w900,
+                            ),
                           ),
                           TextSpan(
                             text: '→ ${nextLvl.label}',
-                            style: TextStyle(color: Colors.white.withOpacity(0.5)),
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.5),
+                            ),
                           ),
                         ],
                       ),
@@ -760,17 +1026,30 @@ class _Trust2CardContent extends StatelessWidget {
                   ),
                   if (data.streakCount > 0)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFFF59E0B).withOpacity(0.15),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.local_fire_department_rounded, color: Color(0xFFF59E0B), size: 12),
+                          const Icon(
+                            Icons.local_fire_department_rounded,
+                            color: Color(0xFFF59E0B),
+                            size: 12,
+                          ),
                           const SizedBox(width: 3),
-                          Text('${data.streakCount}',
-                              style: const TextStyle(color: Color(0xFFF59E0B), fontWeight: FontWeight.w900, fontSize: 12)),
+                          Text(
+                            '${data.streakCount}',
+                            style: const TextStyle(
+                              color: Color(0xFFF59E0B),
+                              fontWeight: FontWeight.w900,
+                              fontSize: 12,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -793,38 +1072,41 @@ class _SegmentedBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final segments = [20, 20, 20, 20, 15, 5]; // widths summing to 100
     int cumulative = 0;
-    return LayoutBuilder(builder: (context, constraints) {
-      return Row(
-        children: List.generate(segments.length, (i) {
-          final segStart = cumulative;
-          final segEnd = cumulative + segments[i];
-          cumulative = segEnd;
-          final filled = (score - segStart).clamp(0, segments[i]) / segments[i];
-          final isLast = i == segments.length - 1;
-          return Expanded(
-            flex: segments[i],
-            child: Container(
-              margin: EdgeInsets.only(right: isLast ? 0 : 3),
-              height: 7,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(4),
-                color: Colors.white12,
-              ),
-              child: FractionallySizedBox(
-                widthFactor: filled.toDouble(),
-                alignment: Alignment.centerLeft,
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(4),
-                    color: color,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Row(
+          children: List.generate(segments.length, (i) {
+            final segStart = cumulative;
+            final segEnd = cumulative + segments[i];
+            cumulative = segEnd;
+            final filled =
+                (score - segStart).clamp(0, segments[i]) / segments[i];
+            final isLast = i == segments.length - 1;
+            return Expanded(
+              flex: segments[i],
+              child: Container(
+                margin: EdgeInsets.only(right: isLast ? 0 : 3),
+                height: 7,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(4),
+                  color: Colors.white12,
+                ),
+                child: FractionallySizedBox(
+                  widthFactor: filled.toDouble(),
+                  alignment: Alignment.centerLeft,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(4),
+                      color: color,
+                    ),
                   ),
                 ),
               ),
-            ),
-          );
-        }),
-      );
-    });
+            );
+          }),
+        );
+      },
+    );
   }
 }
 
@@ -833,7 +1115,12 @@ class _SubScoreRow extends StatelessWidget {
   final IconData icon;
   final int value;
   final Color color;
-  const _SubScoreRow({required this.label, required this.icon, required this.value, required this.color});
+  const _SubScoreRow({
+    required this.label,
+    required this.icon,
+    required this.value,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -843,7 +1130,10 @@ class _SubScoreRow extends StatelessWidget {
         const SizedBox(width: 8),
         SizedBox(
           width: 78,
-          child: Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+          child: Text(
+            label,
+            style: const TextStyle(color: Colors.white70, fontSize: 12),
+          ),
         ),
         Expanded(
           child: ClipRRect(
@@ -859,66 +1149,55 @@ class _SubScoreRow extends StatelessWidget {
         const SizedBox(width: 8),
         SizedBox(
           width: 28,
-          child: Text('$value', style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12)),
+          child: Text(
+            '$value',
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+            ),
+          ),
         ),
       ],
     );
   }
 }
 
-
-
-
 // ── Stat Card ─────────────────────────────────────────────────────
-
-class _StatCard extends StatelessWidget {
-  final String value;
-  final String label;
-  final Color accentColor;
-  const _StatCard({required this.value, required this.label, required this.accentColor});
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1A1A1A),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withOpacity(0.06)),
-        ),
-        child: Column(
-          children: [
-            Text(value,
-                style: TextStyle(color: accentColor, fontWeight: FontWeight.w900, fontSize: 22)),
-            const SizedBox(height: 6),
-            Text(label,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    color: Colors.white.withOpacity(0.4),
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.5)),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 class _StatItem extends StatelessWidget {
   final String value;
   final String label;
-  const _StatItem({required this.value, required this.label});
+  final VoidCallback? onTap;
+  const _StatItem({required this.value, required this.label, this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Text(value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
-        const SizedBox(height: 4),
-        Text(label, style: TextStyle(color: Colors.white.withOpacity(0.4), fontWeight: FontWeight.bold, fontSize: 10, letterSpacing: 0.5)),
-      ],
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w900,
+              fontSize: 18,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.4),
+              fontWeight: FontWeight.bold,
+              fontSize: 10,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -934,17 +1213,31 @@ class _PostsGrid extends ConsumerWidget {
     final postsAsync = ref.watch(userPostsProvider(userId));
 
     return postsAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator(color: MatchFitTheme.accentGreen)),
-      error: (e, _) => Center(child: Text('Error: $e', style: const TextStyle(color: Colors.white24))),
+      loading: () => const Center(
+        child: CircularProgressIndicator(color: MatchFitTheme.accentGreen),
+      ),
+      error: (e, _) => Center(
+        child: Text('Error: $e', style: const TextStyle(color: Colors.white24)),
+      ),
       data: (posts) {
         if (posts.isEmpty) {
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.grid_on_outlined, size: 48, color: Colors.white.withOpacity(0.1)),
+                Icon(
+                  Icons.grid_on_outlined,
+                  size: 48,
+                  color: Colors.white.withOpacity(0.1),
+                ),
                 const SizedBox(height: 12),
-                Text('Henüz paylaşım yok', style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 14)),
+                Text(
+                  'Henüz paylaşım yok',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.3),
+                    fontSize: 14,
+                  ),
+                ),
               ],
             ),
           );
@@ -961,16 +1254,28 @@ class _PostsGrid extends ConsumerWidget {
           itemBuilder: (context, index) {
             final post = posts[index];
             final mediaUrl = post['media_url'] as String?;
-            final sport = post['events']?['sports']?['name'] as String? ?? 'Sport';
+            final sport =
+                post['events']?['sports']?['name'] as String? ?? 'Sport';
 
             return Container(
               decoration: BoxDecoration(
                 color: const Color(0xFF1E1E1E),
                 borderRadius: BorderRadius.circular(12),
-                image: mediaUrl != null ? DecorationImage(image: NetworkImage(mediaUrl), fit: BoxFit.cover) : null,
+                image: mediaUrl != null
+                    ? DecorationImage(
+                        image: NetworkImage(mediaUrl),
+                        fit: BoxFit.cover,
+                      )
+                    : null,
               ),
               child: mediaUrl == null
-                  ? Center(child: Icon(_getSportIcon(sport), color: Colors.white10, size: 32))
+                  ? Center(
+                      child: Icon(
+                        _getSportIcon(sport),
+                        color: Colors.white10,
+                        size: 32,
+                      ),
+                    )
                   : null,
             );
           },
@@ -981,101 +1286,17 @@ class _PostsGrid extends ConsumerWidget {
 
   IconData _getSportIcon(String sport) {
     switch (sport.toLowerCase()) {
-      case 'tennis': return Icons.sports_tennis;
-      case 'running': return Icons.directions_run;
-      case 'basketball': return Icons.sports_basketball;
-      case 'football': return Icons.sports_soccer;
-      default: return Icons.sports;
+      case 'tennis':
+        return Icons.sports_tennis;
+      case 'running':
+        return Icons.directions_run;
+      case 'basketball':
+        return Icons.sports_basketball;
+      case 'football':
+        return Icons.sports_soccer;
+      default:
+        return Icons.sports;
     }
-  }
-}
-
-class _PastEventsTab extends ConsumerWidget {
-  final String? userId;
-  const _PastEventsTab({required this.userId});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final eventsAsync = ref.watch(userPastEventsProvider(userId));
-
-    return eventsAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator(color: MatchFitTheme.accentGreen)),
-      error: (e, _) => Center(child: Text('Error: $e', style: const TextStyle(color: Colors.white24))),
-      data: (events) {
-        if (events.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.history_outlined, size: 48, color: Colors.white.withOpacity(0.1)),
-                const SizedBox(height: 12),
-                Text('No past events', style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 14)),
-              ],
-            ),
-          );
-        }
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: events.length,
-          itemBuilder: (context, index) {
-            final event = events[index];
-            return Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1A1A1A),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withOpacity(0.05)),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: MatchFitTheme.accentGreen.withOpacity(0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(Icons.check, color: MatchFitTheme.accentGreen, size: 16),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(event['title'] ?? 'Event',
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 2),
-                        Text(event['sports']?['name'] ?? 'Sport',
-                            style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12)),
-                      ],
-                    ),
-                  ),
-                  Text(
-                    (event['event_date'] as String).substring(0, 10),
-                    style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 11),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-}
-
-class _BadgesTab extends ConsumerWidget {
-  final String? userId;
-  const _BadgesTab({required this.userId});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final trustAsync = ref.watch(trustScoreProvider(userId));
-    return trustAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator(color: MatchFitTheme.accentGreen)),
-      error: (_, __) => _BadgesContent(earnedKeys: const []),
-      data: (data) => _BadgesContent(earnedKeys: data.earnedBadgeKeys),
-    );
   }
 }
 
@@ -1094,7 +1315,8 @@ class _BadgesContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final featured = _featuredBadge;
-    final featuredEarned = featured != null && earnedKeys.contains(featured.key);
+    final featuredEarned =
+        featured != null && earnedKeys.contains(featured.key);
 
     return SingleChildScrollView(
       primary: true,
@@ -1103,12 +1325,22 @@ class _BadgesContent extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // ── Header ──────────────────────────────────
-          const Text('Rozet Koleksiyonu',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 26)),
+          const Text(
+            'Rozet Koleksiyonu',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w900,
+              fontSize: 26,
+            ),
+          ),
           const SizedBox(height: 6),
           Text(
             'Maçları tamamlayarak, yüksek güven skoru tutturarak ve streak\'lere hâkim olarak rozet kazan.',
-            style: TextStyle(color: Colors.white.withOpacity(0.45), fontSize: 13, height: 1.45),
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.45),
+              fontSize: 13,
+              height: 1.45,
+            ),
           ),
           const SizedBox(height: 20),
 
@@ -1121,26 +1353,43 @@ class _BadgesContent extends StatelessWidget {
                 color: const Color(0xFF161616),
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                  color: featuredEarned ? featured.color.withOpacity(0.5) : Colors.white12,
+                  color: featuredEarned
+                      ? featured.color.withOpacity(0.5)
+                      : Colors.white12,
                 ),
                 boxShadow: featuredEarned
-                    ? [BoxShadow(color: featured.color.withOpacity(0.2), blurRadius: 24, spreadRadius: 2)]
+                    ? [
+                        BoxShadow(
+                          color: featured.color.withOpacity(0.2),
+                          blurRadius: 24,
+                          spreadRadius: 2,
+                        ),
+                      ]
                     : null,
               ),
               child: Column(
                 children: [
                   // Glowing icon circle
                   Container(
-                    width: 90, height: 90,
+                    width: 90,
+                    height: 90,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: const Color(0xFF1E1E1E),
                       border: Border.all(
-                        color: featuredEarned ? featured.color.withOpacity(0.7) : Colors.white12,
+                        color: featuredEarned
+                            ? featured.color.withOpacity(0.7)
+                            : Colors.white12,
                         width: 2.5,
                       ),
                       boxShadow: featuredEarned
-                          ? [BoxShadow(color: featured.color.withOpacity(0.35), blurRadius: 20, spreadRadius: 4)]
+                          ? [
+                              BoxShadow(
+                                color: featured.color.withOpacity(0.35),
+                                blurRadius: 20,
+                                spreadRadius: 4,
+                              ),
+                            ]
                           : null,
                     ),
                     child: Icon(
@@ -1153,18 +1402,31 @@ class _BadgesContent extends StatelessWidget {
                   Text(
                     featuredEarned ? 'ACTIVE' : 'LOCKED',
                     style: TextStyle(
-                      color: featuredEarned ? MatchFitTheme.accentGreen : Colors.white30,
+                      color: featuredEarned
+                          ? MatchFitTheme.accentGreen
+                          : Colors.white30,
                       fontWeight: FontWeight.w900,
                       fontSize: 11,
                       letterSpacing: 2,
                     ),
                   ),
                   const SizedBox(height: 6),
-                  Text(featured.name,
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 22)),
+                  Text(
+                    featured.name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 22,
+                    ),
+                  ),
                   const SizedBox(height: 4),
-                  Text(featured.requirement,
-                      style: TextStyle(color: Colors.white.withOpacity(0.45), fontSize: 13)),
+                  Text(
+                    featured.requirement,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.45),
+                      fontSize: 13,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -1172,8 +1434,14 @@ class _BadgesContent extends StatelessWidget {
           const SizedBox(height: 28),
 
           // ── All Badges grid ──────────────────────────
-          const Text('All Badges',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
+          const Text(
+            'All Badges',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w900,
+              fontSize: 18,
+            ),
+          ),
           const SizedBox(height: 14),
 
           GridView.builder(
@@ -1223,7 +1491,13 @@ class _BadgeIconCell extends StatelessWidget {
           width: earned ? 1.5 : 1,
         ),
         boxShadow: earned
-            ? [BoxShadow(color: badge.color.withOpacity(0.25), blurRadius: 8, spreadRadius: 1)]
+            ? [
+                BoxShadow(
+                  color: badge.color.withOpacity(0.25),
+                  blurRadius: 8,
+                  spreadRadius: 1,
+                ),
+              ]
             : null,
       ),
       child: Center(
@@ -1251,16 +1525,21 @@ class _BadgeListRow extends StatelessWidget {
         color: const Color(0xFF161616),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: earned ? badge.color.withOpacity(0.25) : Colors.white.withOpacity(0.05),
+          color: earned
+              ? badge.color.withOpacity(0.25)
+              : Colors.white.withOpacity(0.05),
         ),
       ),
       child: Row(
         children: [
           Container(
-            width: 36, height: 36,
+            width: 36,
+            height: 36,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: earned ? badge.color.withOpacity(0.15) : Colors.white.withOpacity(0.04),
+              color: earned
+                  ? badge.color.withOpacity(0.15)
+                  : Colors.white.withOpacity(0.04),
             ),
             child: Icon(
               earned ? badge.icon : Icons.lock_rounded,
@@ -1285,7 +1564,9 @@ class _BadgeListRow extends StatelessWidget {
                 Text(
                   badge.requirement,
                   style: TextStyle(
-                    color: earned ? Colors.white.withOpacity(0.45) : Colors.white.withOpacity(0.2),
+                    color: earned
+                        ? Colors.white.withOpacity(0.45)
+                        : Colors.white.withOpacity(0.2),
                     fontSize: 12,
                   ),
                 ),
@@ -1297,8 +1578,6 @@ class _BadgeListRow extends StatelessWidget {
     );
   }
 }
-
-
 
 class _FriendsTab extends ConsumerWidget {
   final String? userId;
@@ -1312,17 +1591,31 @@ class _FriendsTab extends ConsumerWidget {
     final friendsAsync = ref.watch(userFriendsProvider(targetId));
 
     return friendsAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator(color: MatchFitTheme.accentGreen)),
-      error: (e, _) => Center(child: Text('Error: $e', style: const TextStyle(color: Colors.white24))),
+      loading: () => const Center(
+        child: CircularProgressIndicator(color: MatchFitTheme.accentGreen),
+      ),
+      error: (e, _) => Center(
+        child: Text('Error: $e', style: const TextStyle(color: Colors.white24)),
+      ),
       data: (friends) {
         if (friends.isEmpty) {
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.people_outline, size: 48, color: Colors.white.withOpacity(0.1)),
+                Icon(
+                  Icons.people_outline,
+                  size: 48,
+                  color: Colors.white.withOpacity(0.1),
+                ),
                 const SizedBox(height: 12),
-                Text('Henüz arkadaş yok', style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 14)),
+                Text(
+                  'Henüz arkadaş yok',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.3),
+                    fontSize: 14,
+                  ),
+                ),
               ],
             ),
           );
@@ -1335,17 +1628,35 @@ class _FriendsTab extends ConsumerWidget {
             final friendId = profile['id'] as String;
 
             return ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 24,
+                vertical: 4,
+              ),
               leading: AvatarWidget(
                 name: profile['full_name'] ?? 'Player',
                 radius: 22,
                 avatarUrl: profile['avatar_url'],
               ),
-              title: Text(profile['full_name'] ?? 'Player',
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
-              subtitle: Text('Güven Puanı: ${profile['trust_score'] ?? 100}',
-                  style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12)),
-              trailing: Icon(Icons.arrow_forward_ios, size: 14, color: Colors.white.withOpacity(0.2)),
+              title: Text(
+                profile['full_name'] ?? 'Player',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                ),
+              ),
+              subtitle: Text(
+                'Güven Puanı: ${profile['trust_score'] ?? 100}',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.4),
+                  fontSize: 12,
+                ),
+              ),
+              trailing: Icon(
+                Icons.arrow_forward_ios,
+                size: 14,
+                color: Colors.white.withOpacity(0.2),
+              ),
               onTap: () => context.push('/user-profile', extra: friendId),
             );
           },
@@ -1363,20 +1674,32 @@ class _SportsInterestsSection extends ConsumerStatefulWidget {
   const _SportsInterestsSection({required this.userId, required this.isMe});
 
   @override
-  ConsumerState<_SportsInterestsSection> createState() => _SportsInterestsSectionState();
+  ConsumerState<_SportsInterestsSection> createState() =>
+      _SportsInterestsSectionState();
 }
 
-class _SportsInterestsSectionState extends ConsumerState<_SportsInterestsSection> {
-  Future<void> _showManageSportsDialog(BuildContext context, List<Map<String, dynamic>> currentPrefs) async {
+class _SportsInterestsSectionState
+    extends ConsumerState<_SportsInterestsSection> {
+  Future<void> _showManageSportsDialog(
+    BuildContext context,
+    List<Map<String, dynamic>> currentPrefs,
+  ) async {
     final sb = Supabase.instance.client;
-    
+
     // Fetch all sports
     final sportsResponse = await sb.from('sports').select('id, name');
-    final List<Map<String, dynamic>> allSports = List<Map<String, dynamic>>.from(sportsResponse);
-    allSports.sort((a, b) => (a['name'] as String).compareTo(b['name'] as String));
+    final List<Map<String, dynamic>> allSports =
+        List<Map<String, dynamic>>.from(sportsResponse);
+    allSports.sort(
+      (a, b) => (a['name'] as String).compareTo(b['name'] as String),
+    );
 
-    final selectedSportIds = currentPrefs.map((e) => e['sport_id'] as String).toSet();
-    String selectedLevel = currentPrefs.isNotEmpty ? currentPrefs.first['skill_level'] as String : 'beginner';
+    final selectedSportIds = currentPrefs
+        .map((e) => e['sport_id'] as String)
+        .toSet();
+    String selectedLevel = currentPrefs.isNotEmpty
+        ? currentPrefs.first['skill_level'] as String
+        : 'beginner';
 
     if (!context.mounted) return;
 
@@ -1385,7 +1708,9 @@ class _SportsInterestsSectionState extends ConsumerState<_SportsInterestsSection
       isScrollControlled: true,
       useRootNavigator: true,
       backgroundColor: const Color(0xFF1E1E1E),
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       builder: (ctx) {
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setModalState) {
@@ -1395,136 +1720,204 @@ class _SportsInterestsSectionState extends ConsumerState<_SportsInterestsSection
               maxChildSize: 0.9,
               expand: false,
               builder: (_, controller) {
-                return Padding(
-                  padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + MediaQuery.of(context).padding.bottom),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text('İlgi Alanlarını Düzenle', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-                          IconButton(icon: const Icon(Icons.close, color: Colors.white), onPressed: () => Navigator.pop(ctx)),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Expanded(
-                        child: GridView.builder(
-                          controller: controller,
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            crossAxisSpacing: 12,
-                            mainAxisSpacing: 12,
-                            childAspectRatio: 2.5,
-                          ),
-                          itemCount: allSports.length,
-                          itemBuilder: (context, index) {
-                            final sport = allSports[index];
-                            final id = sport['id'] as String;
-                            final name = sport['name'] as String;
-                            final isSelected = selectedSportIds.contains(id);
-                            
-                            return InkWell(
-                              onTap: () {
-                                setModalState(() {
-                                  if (isSelected) {
-                                    selectedSportIds.remove(id);
-                                  } else {
-                                    selectedSportIds.add(id);
-                                  }
-                                });
-                              },
-                              borderRadius: BorderRadius.circular(12),
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: isSelected ? MatchFitTheme.primaryBlue.withOpacity(0.1) : Colors.transparent,
-                                  border: Border.all(
-                                    color: isSelected ? MatchFitTheme.primaryBlue : Colors.white24,
-                                    width: 2,
-                                  ),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                alignment: Alignment.center,
-                                child: Text(
-                                  name,
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: isSelected ? MatchFitTheme.primaryBlue : Colors.white70,
-                                  ),
-                                ),
+                return SafeArea(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      24,
+                      24,
+                      24,
+                      24 + MediaQuery.of(context).viewInsets.bottom,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'İlgi Alanlarını Düzenle',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
                               ),
-                            );
-                          },
-                        ),
-                      ),
-                      if (selectedSportIds.isNotEmpty) ...[
-                        const SizedBox(height: 16),
-                        const Text('Genel Yetenek Seviyesi', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 8),
-                        SegmentedButton<String>(
-                          style: ButtonStyle(
-                            backgroundColor: WidgetStateProperty.resolveWith((states) {
-                              if (states.contains(WidgetState.selected)) {
-                                return MatchFitTheme.primaryBlue;
-                              }
-                              return Colors.transparent;
-                            }),
-                            foregroundColor: WidgetStateProperty.resolveWith((states) {
-                              if (states.contains(WidgetState.selected)) {
-                                return Colors.white;
-                              }
-                              return Colors.white70;
-                            }),
-                          ),
-                          segments: const [
-                            ButtonSegment(value: 'beginner', label: Text('Başlangıç')),
-                            ButtonSegment(value: 'intermediate', label: Text('Orta')),
-                            ButtonSegment(value: 'advanced', label: Text('İleri')),
+                            ),
+                            IconButton(
+                              icon: const Icon(
+                                Icons.close,
+                                color: Colors.white,
+                              ),
+                              onPressed: () => Navigator.pop(ctx),
+                            ),
                           ],
-                          selected: {selectedLevel},
-                          onSelectionChanged: (Set<String> newSelection) {
-                            setModalState(() {
-                              selectedLevel = newSelection.first;
-                            });
+                        ),
+                        const SizedBox(height: 16),
+                        Expanded(
+                          child: GridView.builder(
+                            controller: controller,
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 2,
+                                  crossAxisSpacing: 12,
+                                  mainAxisSpacing: 12,
+                                  childAspectRatio: 2.5,
+                                ),
+                            itemCount: allSports.length,
+                            itemBuilder: (context, index) {
+                              final sport = allSports[index];
+                              final id = sport['id'] as String;
+                              final name = sport['name'] as String;
+                              final isSelected = selectedSportIds.contains(id);
+
+                              return InkWell(
+                                onTap: () {
+                                  setModalState(() {
+                                    if (isSelected) {
+                                      selectedSportIds.remove(id);
+                                    } else {
+                                      selectedSportIds.add(id);
+                                    }
+                                  });
+                                },
+                                borderRadius: BorderRadius.circular(12),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? MatchFitTheme.primaryBlue.withOpacity(
+                                            0.1,
+                                          )
+                                        : Colors.transparent,
+                                    border: Border.all(
+                                      color: isSelected
+                                          ? MatchFitTheme.primaryBlue
+                                          : Colors.white24,
+                                      width: 2,
+                                    ),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    name,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: isSelected
+                                          ? MatchFitTheme.primaryBlue
+                                          : Colors.white70,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        if (selectedSportIds.isNotEmpty) ...[
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Genel Yetenek Seviyesi',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          SegmentedButton<String>(
+                            style: ButtonStyle(
+                              backgroundColor: WidgetStateProperty.resolveWith((
+                                states,
+                              ) {
+                                if (states.contains(WidgetState.selected)) {
+                                  return MatchFitTheme.primaryBlue;
+                                }
+                                return Colors.transparent;
+                              }),
+                              foregroundColor: WidgetStateProperty.resolveWith((
+                                states,
+                              ) {
+                                if (states.contains(WidgetState.selected)) {
+                                  return Colors.white;
+                                }
+                                return Colors.white70;
+                              }),
+                            ),
+                            segments: const [
+                              ButtonSegment(
+                                value: 'beginner',
+                                label: Text('Başlangıç'),
+                              ),
+                              ButtonSegment(
+                                value: 'intermediate',
+                                label: Text('Orta'),
+                              ),
+                              ButtonSegment(
+                                value: 'advanced',
+                                label: Text('İleri'),
+                              ),
+                            ],
+                            selected: {selectedLevel},
+                            onSelectionChanged: (Set<String> newSelection) {
+                              setModalState(() {
+                                selectedLevel = newSelection.first;
+                              });
+                            },
+                          ),
+                        ],
+                        const SizedBox(height: 24),
+                        ElevatedButton(
+                          onPressed: () async {
+                            final userId = sb.auth.currentUser?.id;
+                            if (userId != null) {
+                              // Delete old ones
+                              await sb
+                                  .from('user_sports_preferences')
+                                  .delete()
+                                  .eq('user_id', userId);
+                              // Insert new ones
+                              if (selectedSportIds.isNotEmpty) {
+                                final inserts = selectedSportIds
+                                    .map(
+                                      (id) => {
+                                        'user_id': userId,
+                                        'sport_id': id,
+                                        'skill_level': selectedLevel,
+                                      },
+                                    )
+                                    .toList();
+                                await sb
+                                    .from('user_sports_preferences')
+                                    .insert(inserts);
+                              }
+                              ref.invalidate(
+                                userSportsPreferencesProvider(widget.userId),
+                              );
+                              if (widget.userId != userId)
+                                ref.invalidate(
+                                  userSportsPreferencesProvider(userId),
+                                );
+                              if (ctx.mounted) Navigator.pop(ctx);
+                            }
                           },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: MatchFitTheme.accentGreen,
+                            foregroundColor: Colors.black,
+                            minimumSize: const Size(double.infinity, 50),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          child: const Text(
+                            'Kaydet',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
                         ),
                       ],
-                      const SizedBox(height: 24),
-                      ElevatedButton(
-                        onPressed: () async {
-                          final userId = sb.auth.currentUser?.id;
-                          if (userId != null) {
-                            // Delete old ones
-                            await sb.from('user_sports_preferences').delete().eq('user_id', userId);
-                            // Insert new ones
-                            if (selectedSportIds.isNotEmpty) {
-                              final inserts = selectedSportIds.map((id) => {
-                                'user_id': userId,
-                                'sport_id': id,
-                                'skill_level': selectedLevel,
-                              }).toList();
-                              await sb.from('user_sports_preferences').insert(inserts);
-                            }
-                            ref.invalidate(userSportsPreferencesProvider(userId));
-                            if (ctx.mounted) Navigator.pop(ctx);
-                          }
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: MatchFitTheme.accentGreen,
-                          foregroundColor: Colors.black,
-                          minimumSize: const Size(double.infinity, 50),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        ),
-                        child: const Text('Kaydet', style: TextStyle(fontWeight: FontWeight.bold)),
-                      ),
-                    ],
+                    ),
                   ),
                 );
               },
             );
-          }
+          },
         );
-      }
+      },
     );
   }
 
@@ -1547,7 +1940,14 @@ class _SportsInterestsSectionState extends ConsumerState<_SportsInterestsSection
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('İlgi Alanlarım', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                const Text(
+                  'İlgi Alanlarım',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
                 if (widget.isMe)
                   InkWell(
                     onTap: () {
@@ -1555,43 +1955,74 @@ class _SportsInterestsSectionState extends ConsumerState<_SportsInterestsSection
                       _showManageSportsDialog(context, currentPrefs);
                     },
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Text('Düzenle', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                      child: const Text(
+                        'Düzenle',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
-                  )
+                  ),
               ],
             ),
             const SizedBox(height: 16),
             prefsAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator(color: MatchFitTheme.accentGreen)),
-              error: (e, _) => Text('Hata: $e', style: const TextStyle(color: Colors.red)),
+              loading: () => const Center(
+                child: CircularProgressIndicator(
+                  color: MatchFitTheme.accentGreen,
+                ),
+              ),
+              error: (e, _) =>
+                  Text('Hata: $e', style: const TextStyle(color: Colors.red)),
               data: (prefs) {
                 if (prefs.isEmpty) {
-                  return Text('Henüz spor branşı seçilmedi.', style: TextStyle(color: Colors.white.withOpacity(0.4)));
+                  return Text(
+                    'Henüz spor branşı seçilmedi.',
+                    style: TextStyle(color: Colors.white.withOpacity(0.4)),
+                  );
                 }
 
                 return Wrap(
                   spacing: 8,
                   runSpacing: 8,
                   children: prefs.map((pref) {
-                    final sportName = pref['sports']?['name'] as String? ?? 'Bilinmiyor';
+                    final sportName =
+                        pref['sports']?['name'] as String? ?? 'Bilinmiyor';
                     return Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         color: MatchFitTheme.primaryBlue.withOpacity(0.15),
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: MatchFitTheme.primaryBlue.withOpacity(0.3)),
+                        border: Border.all(
+                          color: MatchFitTheme.primaryBlue.withOpacity(0.3),
+                        ),
                       ),
-                      child: Text(sportName, style: const TextStyle(color: MatchFitTheme.primaryBlue, fontWeight: FontWeight.bold, fontSize: 13)),
+                      child: Text(
+                        sportName,
+                        style: const TextStyle(
+                          color: MatchFitTheme.primaryBlue,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
                     );
                   }).toList(),
                 );
               },
-            )
+            ),
           ],
         ),
       ),
@@ -1608,7 +2039,9 @@ class _TrustBadgesTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final trustAsync = ref.watch(trustScoreProvider(userId));
-    final earnedKeys = trustAsync.whenData((d) => d.earnedBadgeKeys).asData?.value ?? const <String>[];
+    final earnedKeys =
+        trustAsync.whenData((d) => d.earnedBadgeKeys).asData?.value ??
+        const <String>[];
     return SingleChildScrollView(
       primary: true,
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
@@ -1617,8 +2050,14 @@ class _TrustBadgesTab extends ConsumerWidget {
         children: [
           _Trust2Card(userId: userId ?? ''),
           const SizedBox(height: 24),
-          const Text('Rozetler',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
+          const Text(
+            'Rozetler',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w900,
+              fontSize: 18,
+            ),
+          ),
           const SizedBox(height: 12),
           _BadgesContent(earnedKeys: earnedKeys),
         ],
@@ -1655,17 +2094,30 @@ class _InterestsTabState extends ConsumerState<_InterestsTab> {
   static const List<String> _suggested = ['Padel', 'Bisiklet', 'Yoga'];
 
   @override
-  void dispose() { _searchCtrl.dispose(); super.dispose(); }
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
 
   Future<void> _addSportByName(String sportName) async {
     final sb = Supabase.instance.client;
     final uid = sb.auth.currentUser?.id;
     if (uid == null) return;
     try {
-      final res = await sb.from('sports').select('id').ilike('name', sportName).maybeSingle();
+      final res = await sb
+          .from('sports')
+          .select('id')
+          .ilike('name', sportName)
+          .maybeSingle();
       if (res == null) return;
-      await sb.from('user_sports_preferences').upsert({'user_id': uid, 'sport_id': res['id'], 'skill_level': 'beginner'});
-      ref.invalidate(userSportsPreferencesProvider(uid));
+      await sb.from('user_sports_preferences').upsert({
+        'user_id': uid,
+        'sport_id': res['id'],
+        'skill_level': 'beginner',
+      });
+      ref.invalidate(userSportsPreferencesProvider(widget.userId));
+      if (widget.userId != uid)
+        ref.invalidate(userSportsPreferencesProvider(uid));
     } catch (_) {}
   }
 
@@ -1674,44 +2126,87 @@ class _InterestsTabState extends ConsumerState<_InterestsTab> {
     await showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF1E1E1E),
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(pref['sports']?['name'] ?? '', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
-            const SizedBox(height: 16),
-            ...levels.map((lvl) {
-              final isSelected = (pref['skill_level'] as String?) == lvl;
-              final c = _levelColors[lvl] ?? Colors.white54;
-              return InkWell(
-                onTap: () async {
-                  final sb = Supabase.instance.client;
-                  final uid = sb.auth.currentUser?.id;
-                  if (uid != null) {
-                    await sb.from('user_sports_preferences').update({'skill_level': lvl}).eq('user_id', uid).eq('sport_id', pref['sport_id']);
-                    ref.invalidate(userSportsPreferencesProvider(uid));
-                  }
-                  if (ctx.mounted) Navigator.pop(ctx);
-                },
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  decoration: BoxDecoration(
-                    color: isSelected ? c.withOpacity(0.12) : const Color(0xFF2A2A2A),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: isSelected ? c.withOpacity(0.5) : Colors.white12),
-                  ),
-                  child: Row(children: [
-                    Text(_levelLabels[lvl] ?? lvl, style: TextStyle(color: isSelected ? c : Colors.white70, fontWeight: FontWeight.bold)),
-                    if (isSelected) ...[const Spacer(), Icon(Icons.check_circle_rounded, color: c, size: 18)],
-                  ]),
+      useRootNavigator: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            24,
+            24,
+            24,
+            24 + MediaQuery.of(context).viewInsets.bottom,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                pref['sports']?['name'] ?? '',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 18,
                 ),
-              );
-            }),
-          ],
+              ),
+              const SizedBox(height: 16),
+              ...levels.map((lvl) {
+                final isSelected = (pref['skill_level'] as String?) == lvl;
+                final c = _levelColors[lvl] ?? Colors.white54;
+                return InkWell(
+                  onTap: () async {
+                    final sb = Supabase.instance.client;
+                    final uid = sb.auth.currentUser?.id;
+                    if (uid != null) {
+                      await sb
+                          .from('user_sports_preferences')
+                          .update({'skill_level': lvl})
+                          .eq('user_id', uid)
+                          .eq('sport_id', pref['sport_id']);
+                      ref.invalidate(
+                        userSportsPreferencesProvider(widget.userId),
+                      );
+                      if (widget.userId != uid)
+                        ref.invalidate(userSportsPreferencesProvider(uid));
+                    }
+                    if (ctx.mounted) Navigator.pop(ctx);
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? c.withOpacity(0.12)
+                          : const Color(0xFF2A2A2A),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isSelected ? c.withOpacity(0.5) : Colors.white12,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Text(
+                          _levelLabels[lvl] ?? lvl,
+                          style: TextStyle(
+                            color: isSelected ? c : Colors.white70,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        if (isSelected) ...[
+                          const Spacer(),
+                          Icon(Icons.check_circle_rounded, color: c, size: 18),
+                        ],
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            ],
+          ),
         ),
       ),
     );
@@ -1738,7 +2233,7 @@ class _InterestsTabState extends ConsumerState<_InterestsTab> {
           .select('id, name')
           .ilike('name', '%$query%')
           .limit(8);
-      
+
       if (mounted) {
         setState(() {
           _searchResults = List<Map<String, dynamic>>.from(response);
@@ -1750,7 +2245,6 @@ class _InterestsTabState extends ConsumerState<_InterestsTab> {
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
     final prefsAsync = ref.watch(userSportsPreferencesProvider(widget.userId));
@@ -1760,54 +2254,112 @@ class _InterestsTabState extends ConsumerState<_InterestsTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('My Interests', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 22)),
+          const Text(
+            'My Interests',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w900,
+              fontSize: 22,
+            ),
+          ),
           const SizedBox(height: 14),
           prefsAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator(color: MatchFitTheme.accentGreen)),
+            loading: () => const Center(
+              child: CircularProgressIndicator(
+                color: MatchFitTheme.accentGreen,
+              ),
+            ),
             error: (_, __) => const SizedBox.shrink(),
             data: (prefs) {
               if (prefs.isEmpty) {
                 return Container(
                   padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(color: const Color(0xFF1A1A1A), borderRadius: BorderRadius.circular(16)),
-                  child: Text('Henüz spor branşı eklenmedi.', style: TextStyle(color: Colors.white.withOpacity(0.4))),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1A1A1A),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Text(
+                    'Henüz spor branşı eklenmedi.',
+                    style: TextStyle(color: Colors.white.withOpacity(0.4)),
+                  ),
                 );
               }
               return Column(
                 children: prefs.map((pref) {
-                  final name = pref['sports']?['name'] as String? ?? 'Bilinmiyor';
+                  final name =
+                      pref['sports']?['name'] as String? ?? 'Bilinmiyor';
                   final level = pref['skill_level'] as String? ?? 'beginner';
                   final lvlColor = _levelColors[level] ?? Colors.white54;
                   final lvlLabel = _levelLabels[level] ?? level;
                   return Container(
                     margin: const EdgeInsets.only(bottom: 10),
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 16,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFF1A1A1A),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: Colors.white.withOpacity(0.07)),
                     ),
-                    child: Row(children: [
-                      Container(
-                        width: 42, height: 42,
-                        decoration: BoxDecoration(color: MatchFitTheme.primaryBlue.withOpacity(0.12), shape: BoxShape.circle),
-                        child: const Icon(Icons.sports, color: MatchFitTheme.primaryBlue, size: 20),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
-                        Text(lvlLabel, style: TextStyle(color: lvlColor, fontSize: 12, fontWeight: FontWeight.w600)),
-                      ])),
-                      if (widget.isMe)
-                        GestureDetector(
-                          onTap: () => _editSkillLevel(pref),
-                          child: Container(
-                            width: 34, height: 34,
-                            decoration: BoxDecoration(color: Colors.white.withOpacity(0.07), shape: BoxShape.circle),
-                            child: const Icon(Icons.edit_rounded, color: Colors.white54, size: 16),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: MatchFitTheme.primaryBlue.withOpacity(0.12),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.sports,
+                            color: MatchFitTheme.primaryBlue,
+                            size: 20,
                           ),
                         ),
-                    ]),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                name,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                ),
+                              ),
+                              Text(
+                                lvlLabel,
+                                style: TextStyle(
+                                  color: lvlColor,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (widget.isMe)
+                          GestureDetector(
+                            onTap: () => _editSkillLevel(pref),
+                            child: Container(
+                              width: 34,
+                              height: 34,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.07),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.edit_rounded,
+                                color: Colors.white54,
+                                size: 16,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                   );
                 }).toList(),
               );
@@ -1815,25 +2367,70 @@ class _InterestsTabState extends ConsumerState<_InterestsTab> {
           ),
           if (widget.isMe) ...[
             const SizedBox(height: 24),
-            Text('Suggested for You', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 13, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 10),
-            Wrap(spacing: 8, children: _suggested.map((s) => GestureDetector(
-              onTap: () => _addSportByName(s),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(color: const Color(0xFF1A1A1A), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white12)),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Text(s, style: const TextStyle(color: Colors.white70, fontSize: 13)),
-                  const SizedBox(width: 6),
-                  const Icon(Icons.add, color: Colors.white38, size: 16),
-                ]),
+            Text(
+              'Suggested for You',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.5),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
               ),
-            )).toList()),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              children: _suggested
+                  .map(
+                    (s) => GestureDetector(
+                      onTap: () => _addSportByName(s),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1A1A1A),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.white12),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              s,
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            const Icon(
+                              Icons.add,
+                              color: Colors.white38,
+                              size: 16,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
             const SizedBox(height: 28),
-            const Text('Add New Interest', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
+            const Text(
+              'Add New Interest',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+                fontSize: 18,
+              ),
+            ),
             const SizedBox(height: 12),
             Container(
-              decoration: BoxDecoration(color: const Color(0xFF1A1A1A), borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.white10)),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A1A1A),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white10),
+              ),
               child: TextField(
                 controller: _searchCtrl,
                 onChanged: (v) {
@@ -1843,8 +2440,15 @@ class _InterestsTabState extends ConsumerState<_InterestsTab> {
                 style: const TextStyle(color: Colors.white, fontSize: 14),
                 decoration: InputDecoration(
                   hintText: 'Search sports...',
-                  hintStyle: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 14),
-                  prefixIcon: Icon(Icons.search, color: Colors.white.withOpacity(0.3), size: 20),
+                  hintStyle: TextStyle(
+                    color: Colors.white.withOpacity(0.3),
+                    fontSize: 14,
+                  ),
+                  prefixIcon: Icon(
+                    Icons.search,
+                    color: Colors.white.withOpacity(0.3),
+                    size: 20,
+                  ),
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(vertical: 14),
                 ),
@@ -1855,12 +2459,22 @@ class _InterestsTabState extends ConsumerState<_InterestsTab> {
             if (_isSearching)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 20),
-                child: Center(child: CircularProgressIndicator(color: MatchFitTheme.accentGreen, strokeWidth: 2)),
+                child: Center(
+                  child: CircularProgressIndicator(
+                    color: MatchFitTheme.accentGreen,
+                    strokeWidth: 2,
+                  ),
+                ),
               )
             else if (_searchQuery.isNotEmpty && _searchResults.isEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 20),
-                child: Center(child: Text('No sports found.', style: TextStyle(color: Colors.white.withOpacity(0.3)))),
+                child: Center(
+                  child: Text(
+                    'No sports found.',
+                    style: TextStyle(color: Colors.white.withOpacity(0.3)),
+                  ),
+                ),
               )
             else if (_searchResults.isNotEmpty)
               ListView.builder(
@@ -1881,11 +2495,28 @@ class _InterestsTabState extends ConsumerState<_InterestsTab> {
                       dense: true,
                       leading: Container(
                         padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(color: MatchFitTheme.accentGreen.withOpacity(0.1), shape: BoxShape.circle),
-                        child: const Icon(Icons.sports_rounded, color: MatchFitTheme.accentGreen, size: 16),
+                        decoration: BoxDecoration(
+                          color: MatchFitTheme.accentGreen.withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.sports_rounded,
+                          color: MatchFitTheme.accentGreen,
+                          size: 16,
+                        ),
                       ),
-                      title: Text(name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                      trailing: const Icon(Icons.add_circle_outline_rounded, color: MatchFitTheme.accentGreen, size: 20),
+                      title: Text(
+                        name,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      trailing: const Icon(
+                        Icons.add_circle_outline_rounded,
+                        color: MatchFitTheme.accentGreen,
+                        size: 20,
+                      ),
                       onTap: () {
                         _addSportByName(name);
                         _searchCtrl.clear();
@@ -1898,7 +2529,6 @@ class _InterestsTabState extends ConsumerState<_InterestsTab> {
                   );
                 },
               ),
-
           ],
         ],
       ),

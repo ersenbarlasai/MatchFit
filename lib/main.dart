@@ -8,6 +8,7 @@ import 'core/router.dart';
 import 'core/constants.dart';
 import 'core/l10n/app_localizations.dart';
 import 'core/providers/locale_provider.dart';
+import 'core/services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,6 +17,9 @@ void main() async {
     url: AppConstants.supabaseUrl,
     anonKey: AppConstants.supabaseAnonKey,
   );
+
+  final notificationService = NotificationService();
+  await notificationService.init();
 
   runApp(const ProviderScope(child: MatchFitApp()));
 }

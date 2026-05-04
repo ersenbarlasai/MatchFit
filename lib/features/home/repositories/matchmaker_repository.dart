@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/foundation.dart';
 import 'package:matchfit/core/services/location_service.dart';
 
 class MatchmakerRepository {
@@ -7,7 +8,10 @@ class MatchmakerRepository {
 
   MatchmakerRepository(this._supabase);
 
-  Future<List<Map<String, dynamic>>> getSuggestedMembers({double? lat, double? lng}) async {
+  Future<List<Map<String, dynamic>>> getSuggestedMembers({
+    double? lat,
+    double? lng,
+  }) async {
     final currentUser = _supabase.auth.currentUser;
     if (currentUser == null) return [];
 
@@ -15,12 +19,11 @@ class MatchmakerRepository {
       // 1. Eğer konum varsa, PostGIS üzerinden tam eşleşme ve mesafe hesabı yapan RPC'yi çağır (25km)
       if (lat != null && lng != null) {
         try {
-          final response = await _supabase.rpc('get_recommended_users', params: {
-            'user_lat': lat,
-            'user_lng': lng,
-            'radius_meters': 25000,
-          });
-          
+          final response = await _supabase.rpc(
+            'get_recommended_users',
+            params: {'user_lat': lat, 'user_lng': lng, 'radius_meters': 25000},
+          );
+
           if (response != null) {
             final List list = response as List;
             if (list.isNotEmpty) {
@@ -28,7 +31,7 @@ class MatchmakerRepository {
             }
           }
         } catch (rpcErr) {
-          print('Matchmaker RPC Error: $rpcErr');
+          debugPrint('Matchmaker RPC error: $rpcErr');
         }
       }
 
@@ -37,8 +40,10 @@ class MatchmakerRepository {
           .from('user_sports_preferences')
           .select('sport_id')
           .eq('user_id', currentUser.id);
-      
-      final mySportIds = (mySportsResponse as List).map((s) => s['sport_id'] as String).toList();
+
+      final mySportIds = (mySportsResponse as List)
+          .map((s) => s['sport_id'] as String)
+          .toList();
 
       if (mySportIds.isEmpty) {
         return []; // Kullanıcının hiçbir spor ilgi alanı yoksa ve yakınlarda da kimse yoksa WhatsApp davetine düşsün
@@ -65,7 +70,7 @@ class MatchmakerRepository {
           .limit(20);
 
       final List<Map<String, dynamic>> finalSuggestions = [];
-      
+
       for (final profileData in profilesResponse) {
         final profile = Map<String, dynamic>.from(profileData);
         profile['shared_sports'] = []; // Fallback için boş dizi
@@ -74,7 +79,7 @@ class MatchmakerRepository {
 
       return finalSuggestions.take(10).toList();
     } catch (e) {
-      print('Error fetching suggestions: $e');
+      debugPrint('Error fetching suggestions: $e');
       return [];
     }
   }
@@ -84,10 +89,10 @@ final matchmakerRepositoryProvider = Provider<MatchmakerRepository>((ref) {
   return MatchmakerRepository(Supabase.instance.client);
 });
 
-final suggestedMembersProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
-  final userLoc = await ref.watch(userLocationProvider.future);
-  return ref.read(matchmakerRepositoryProvider).getSuggestedMembers(
-    lat: userLoc?.latitude,
-    lng: userLoc?.longitude,
-  );
-});
+final suggestedMembersProvider =
+    FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
+      final userLoc = await ref.watch(userLocationProvider.future);
+      return ref
+          .read(matchmakerRepositoryProvider)
+          .getSuggestedMembers(lat: userLoc?.latitude, lng: userLoc?.longitude);
+    });

@@ -98,7 +98,31 @@ class AppLocalizations {
   String get mustAgreeTerms => _t('must_agree_terms');
   String get pleaseFillAllFields => _t('please_fill_all_fields');
   String get passwordsDontMatch => _t('passwords_dont_match');
+  String get phoneFormatError => _t('phone_format_error');
+  String get ageError => _t('age_error');
+  String get phoneHint => _t('phone_hint');
   String get signUpError => _t('sign_up_error');
+  String get step => _t('step');
+  String get personalInfo => _t('personal_info');
+  String get firstName => _t('first_name');
+  String get lastName => _t('last_name');
+  String get phoneNumber => _t('phone_number');
+  String get birthDate => _t('birth_date');
+  String get selectCity => _t('select_city');
+  String get searchDistrict => _t('search_district');
+  String get passwordRepeat => _t('password_repeat');
+  String get kvkkConsent => _t('kvkk_consent');
+  String get termsConsentPrefix => _t('terms_consent_prefix');
+  String get termsConsentMiddle => _t('terms_consent_middle');
+  String get termsConsentSuffix => _t('terms_consent_suffix');
+  String get nextStepButton => _t('next_step_button');
+  String get selectInterests => _t('select_interests');
+  String get selectInterestsSubtitle => _t('select_interests_subtitle');
+  String get searchSportsHint => _t('search_sports_hint');
+  String get popularSports => _t('popular_sports');
+  String get viewAll => _t('view_all');
+  String get otherCategories => _t('other_categories');
+  String get finishRegistration => _t('finish_registration');
 
   // ══════════════════════════════════════════════════════════════
   // AUTH - RESET PASSWORD
