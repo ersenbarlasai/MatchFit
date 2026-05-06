@@ -6,6 +6,7 @@ import '../repositories/event_repository.dart';
 import '../../auth/repositories/auth_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../referee/repositories/referee_repository.dart';
+import '../../guardian/repositories/guardian_repository.dart';
 import 'package:matchfit/core/services/location_search_service.dart';
 import 'package:matchfit/core/constants/location_data.dart';
 import 'package:matchfit/core/constants/sports_data.dart';
@@ -120,13 +121,50 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
     try {
       final authRepo = ref.read(authRepositoryProvider);
       final currentUser = authRepo.currentUser;
-      if (currentUser == null)
+      if (currentUser == null) {
         throw Exception('You must be logged in to create an event');
+      }
 
+      final restrictionMessage = AppLocalizations.of(
+        context,
+      ).refereeRestriction;
       final refereeRepo = ref.read(refereeRepositoryProvider);
       final isRestricted = await refereeRepo.isUserRestricted(currentUser.id);
       if (isRestricted) {
-        throw Exception(AppLocalizations.of(context).refereeRestriction);
+        throw Exception(restrictionMessage);
+      }
+
+      final guardianRepo = ref.read(guardianRepositoryProvider);
+      final canCreateEvent = await guardianRepo.canCreateEvent(currentUser.id);
+      if (!canCreateEvent) {
+        throw Exception(
+          'Güvenlik nedeniyle yeni üyeler ilk 48 saat etkinlik oluşturamaz.',
+        );
+      }
+
+      final textForModeration = [
+        _titleController.text,
+        _descriptionController.text,
+        _venueController.text,
+      ].join(' ');
+      if (guardianRepo.scanForRisks(textForModeration)) {
+        throw Exception(
+          'Etkinlik metninde güvenlik riski olabilecek bilgi tespit edildi.',
+        );
+      }
+
+      final selectedLat = _selectedLat;
+      final selectedLng = _selectedLng;
+      if (selectedLat == null || selectedLng == null) {
+        throw Exception('Lütfen haritadan geçerli bir etkinlik konumu seçin.');
+      }
+
+      final isValidLocation = await guardianRepo.validateEventLocation(
+        selectedLat,
+        selectedLng,
+      );
+      if (!isValidLocation) {
+        throw Exception('Etkinlik konumu güvenlik kontrolünden geçemedi.');
       }
 
       final sportResponse = await Supabase.instance.client
@@ -159,8 +197,8 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
         'event_date': eventDate.toIso8601String().split('T')[0],
         'start_time': formattedTime,
         'location_name': fullLocationName,
-        'lat': _selectedLat,
-        'lng': _selectedLng,
+        'lat': selectedLat,
+        'lng': selectedLng,
         'max_participants': maxParticipants,
         'required_level': requiredLevel,
         'is_indoor': isIndoor,

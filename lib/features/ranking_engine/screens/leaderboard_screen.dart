@@ -228,12 +228,10 @@ class _TopRankCard extends StatelessWidget {
   Widget build(BuildContext context) {
     Color borderColor;
     Color accentColor;
-    IconData? rankIcon;
 
     if (rank == 1) {
       borderColor = Colors.amber.withOpacity(0.5);
       accentColor = Colors.amber;
-      rankIcon = Icons.military_tech;
     } else if (rank == 2) {
       borderColor = Colors.white54;
       accentColor = Colors.white70;

@@ -11,6 +11,14 @@ Suggested consolidation path:
 3. Avoid app-side fallbacks for missing columns after a migration is released.
 4. Record which migration has been applied to each environment.
 
+Canonical migration entry point for new work:
+
+- `supabase/migrations/20260506_agent_system_hardening.sql`
+
+This migration is intentionally non-destructive. It centralizes notification
+policies/triggers, makes event location triggers re-runnable, and hardens daily
+XP/MF reward handling without deleting production data.
+
 Current loose SQL files to reconcile:
 
 - `avatar_storage_setup.sql`

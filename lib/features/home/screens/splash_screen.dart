@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:matchfit/core/theme.dart';
-import '../../xp_engine/repositories/xp_engine_repository.dart';
 import '../../economy_engine/repositories/economy_engine_repository.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -24,12 +23,13 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   void _setupAuthListener() {
-    _authStateSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((data) {
-      final AuthChangeEvent event = data.event;
-      if (event == AuthChangeEvent.passwordRecovery) {
-        if (mounted) context.go('/update-password');
-      }
-    });
+    _authStateSubscription = Supabase.instance.client.auth.onAuthStateChange
+        .listen((data) {
+          final AuthChangeEvent event = data.event;
+          if (event == AuthChangeEvent.passwordRecovery) {
+            if (mounted) context.go('/update-password');
+          }
+        });
   }
 
   @override
@@ -41,7 +41,7 @@ class _SplashScreenState extends State<SplashScreen> {
   Future<void> _checkAuth() async {
     await Future.delayed(const Duration(seconds: 2));
     if (!mounted) return;
-    
+
     // Don't redirect if we already caught a passwordRecovery event
     final currentRoute = GoRouterState.of(context).uri.toString();
     if (currentRoute == '/update-password') return;
@@ -49,8 +49,7 @@ class _SplashScreenState extends State<SplashScreen> {
     final session = Supabase.instance.client.auth.currentSession;
     if (session != null) {
       // Günlük giriş veya uygulama açılışı için XP ve MF Points (SQL arka planda sınırlandırabilir)
-      XPEngineRepository().addUserXP(10, 'app_open');
-      EconomyEngineRepository().addMFPoints(5, 'app_open', description: 'Günlük Giriş Ödülü');
+      EconomyEngineRepository().awardDailyAppOpenRewards();
       context.go('/home');
     } else {
       context.go('/login');
@@ -70,7 +69,10 @@ class _SplashScreenState extends State<SplashScreen> {
               decoration: BoxDecoration(
                 color: MatchFitTheme.primaryBlue.withOpacity(0.1),
                 shape: BoxShape.circle,
-                border: Border.all(color: MatchFitTheme.primaryBlue.withOpacity(0.2), width: 2),
+                border: Border.all(
+                  color: MatchFitTheme.primaryBlue.withOpacity(0.2),
+                  width: 2,
+                ),
               ),
               child: const Icon(
                 Icons.sports,
@@ -82,17 +84,17 @@ class _SplashScreenState extends State<SplashScreen> {
             Text(
               'MatchFit',
               style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -1.5,
-                  ),
+                fontWeight: FontWeight.w900,
+                letterSpacing: -1.5,
+              ),
             ),
             const SizedBox(height: 12),
             Text(
               'Find your match. Own the game.',
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                    fontWeight: FontWeight.w500,
-                  ),
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ],
         ),

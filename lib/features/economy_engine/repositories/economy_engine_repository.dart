@@ -4,20 +4,40 @@ import 'package:flutter/foundation.dart';
 class EconomyEngineRepository {
   final _supabase = Supabase.instance.client;
 
-  /// Kullanıcıya MF Points ekler (pozitif) veya harcar (negatif).
-  /// [amount] eklenecek/harcanacak miktar
-  /// [source] Kaynak (Örn: 'check_in', 'app_open', 'reward_redemption')
-  Future<void> addMFPoints(int amount, String source, {String description = ''}) async {
+  Future<void> awardDailyAppOpenRewards() async {
     try {
       final user = _supabase.auth.currentUser;
       if (user == null) return;
 
-      await _supabase.rpc('add_mf_points', params: {
-        'p_user_id': user.id,
-        'p_amount': amount,
-        'p_source': source,
-        'p_description': description,
-      });
+      await _supabase.rpc('award_daily_app_open_rewards');
+
+      debugPrint('[@EconomyEngine] Daily app-open rewards processed');
+    } catch (e) {
+      debugPrint('[@EconomyEngine] Error processing app-open rewards: $e');
+    }
+  }
+
+  /// Kullanıcıya MF Points ekler (pozitif) veya harcar (negatif).
+  /// [amount] eklenecek/harcanacak miktar
+  /// [source] Kaynak (Örn: 'check_in', 'app_open', 'reward_redemption')
+  Future<void> addMFPoints(
+    int amount,
+    String source, {
+    String description = '',
+  }) async {
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) return;
+
+      await _supabase.rpc(
+        'add_mf_points',
+        params: {
+          'p_user_id': user.id,
+          'p_amount': amount,
+          'p_source': source,
+          'p_description': description,
+        },
+      );
 
       debugPrint('[@EconomyEngine] $amount MF Points processed from $source');
     } catch (e) {
@@ -33,7 +53,7 @@ class EconomyEngineRepository {
           .select()
           .eq('user_id', userId)
           .maybeSingle();
-          
+
       return response;
     } catch (e) {
       debugPrint('[@EconomyEngine] Error fetching MF Balance: $e');
@@ -53,7 +73,7 @@ class EconomyEngineRepository {
           .eq('user_id', user.id)
           .order('created_at', ascending: false)
           .limit(20);
-          
+
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
       debugPrint('[@EconomyEngine] Error fetching MF ledger: $e');

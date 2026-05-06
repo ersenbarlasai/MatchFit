@@ -5,7 +5,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:matchfit/core/theme.dart';
 import 'package:matchfit/core/constants/sports_data.dart';
 import 'package:matchfit/core/constants/location_data.dart';
-import '../repositories/coach_repository.dart';
 import '../providers/coach_provider.dart';
 
 class BecomeCoachScreen extends ConsumerStatefulWidget {

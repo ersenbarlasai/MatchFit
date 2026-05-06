@@ -470,11 +470,6 @@ class HomeScreen extends ConsumerWidget {
             child: profileAsync.when(
               data: (p) {
                 final fullName = p?['full_name'] ?? 'Kullanıcı';
-                final city = p?['city'] ?? '';
-                final district = p?['district'] ?? '';
-                final location = (city.isNotEmpty && district.isNotEmpty)
-                    ? '$city / $district'
-                    : (city.isNotEmpty ? city : 'Konum Belirtilmedi');
 
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

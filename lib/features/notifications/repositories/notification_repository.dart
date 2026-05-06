@@ -98,15 +98,16 @@ class NotificationRepository {
     final senderId = _supabase.auth.currentUser?.id;
     if (senderId == null) return;
 
-    await _supabase.from('notifications').insert({
-      'sender_id': senderId,
-      'receiver_id': receiverId,
-      'title': title,
-      'content': content,
-      'type': type,
-      'data': data,
-      'is_read': false,
-    });
+    await _supabase.rpc(
+      'create_notification_request',
+      params: {
+        'p_receiver_id': receiverId,
+        'p_type': type,
+        'p_title': title,
+        'p_message': content,
+        'p_data': data ?? <String, dynamic>{},
+      },
+    );
   }
 }
 
