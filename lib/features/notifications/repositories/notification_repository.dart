@@ -43,6 +43,20 @@ class NotificationRepository {
     await _supabase.from('notifications').delete().eq('id', notificationId);
   }
 
+  Future<void> archiveNotification(String notificationId) async {
+    await _supabase
+        .from('notifications')
+        .update({'is_archived': true})
+        .eq('id', notificationId);
+  }
+
+  Future<void> unarchiveNotification(String notificationId) async {
+    await _supabase
+        .from('notifications')
+        .update({'is_archived': false})
+        .eq('id', notificationId);
+  }
+
   Future<void> deleteAllNotifications() async {
     final user = _supabase.auth.currentUser;
     if (user == null) return;

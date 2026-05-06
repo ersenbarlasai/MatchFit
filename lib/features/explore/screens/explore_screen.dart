@@ -316,11 +316,19 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
             ),
 
           // ── Map ──
-          if (!_mapExpanded) const SizedBox(height: 12),
-          _MapSection(
-            expanded: _mapExpanded,
-            onToggle: () => setState(() => _mapExpanded = !_mapExpanded),
-          ),
+          if (!_mapExpanded) ...[
+            const SizedBox(height: 12),
+            _MapSection(
+              expanded: false,
+              onToggle: () => setState(() => _mapExpanded = true),
+            ),
+          ] else
+            Expanded(
+              child: _MapSection(
+                expanded: true,
+                onToggle: () => setState(() => _mapExpanded = false),
+              ),
+            ),
 
           // ── Handle (hidden when expanded) ──
           if (!_mapExpanded) ...[
@@ -348,7 +356,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
               child: Row(
                 children: [
                   const Text(
-                    'Yakındaki Maçlar',
+                    'Yakındaki Etkinlikler',
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w900,
@@ -822,7 +830,7 @@ class _MapSectionState extends ConsumerState<_MapSection> {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 350),
       curve: Curves.easeInOut,
-      height: expanded ? MediaQuery.of(context).size.height : 220,
+      height: expanded ? double.infinity : 220,
       margin: EdgeInsets.zero,
       child: Stack(
         children: [

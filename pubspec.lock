@@ -169,6 +169,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.7.12"
+  emoji_picker_flutter:
+    dependency: "direct main"
+    description:
+      name: emoji_picker_flutter
+      sha256: "984d3e9b9cf3175df9a868ce4a2d9611491e80e5d3b8e2b1e8991a4998972885"
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.4.0"
   fake_async:
     dependency: transitive
     description:
@@ -307,6 +315,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.3.1"
+  flutter_slidable:
+    dependency: "direct main"
+    description:
+      name: flutter_slidable
+      sha256: ea369262929d3cc6ebf9d8a00c196127966f117fe433a5e5cb47fb08008ca203
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.0.3"
   flutter_test:
     dependency: "direct dev"
     description: flutter

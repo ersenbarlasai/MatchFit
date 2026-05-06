@@ -627,12 +627,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                     children: [
                                       Row(
                                         children: [
-                                          Text(
-                                            name,
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.w900,
-                                              fontSize: 24,
+                                          Flexible(
+                                            child: Text(
+                                              name,
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.w900,
+                                                fontSize: 24,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                              maxLines: 1,
                                             ),
                                           ),
                                           const SizedBox(width: 8),
@@ -713,56 +717,106 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                   ),
                                 ),
 
-                                // Follow Button (Only if not me)
+                                // Follow & Message Buttons (Only if not me)
                                 if (!isMe)
-                                  ElevatedButton(
-                                    onPressed: () async {
-                                      if (relationshipStatus == 'following') {
-                                        await ref
-                                            .read(socialRepositoryProvider)
-                                            .unfollowUser(userId);
-                                      } else if (relationshipStatus ==
-                                          'pending') {
-                                        await ref
-                                            .read(socialRepositoryProvider)
-                                            .unfollowUser(userId);
-                                      } else {
-                                        await ref
-                                            .read(socialRepositoryProvider)
-                                            .sendFollowRequest(userId);
-                                      }
-                                      ref.invalidate(
-                                        relationshipStatusProvider(userId),
-                                      );
-                                    },
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor:
-                                          relationshipStatus != 'following'
-                                          ? MatchFitTheme.accentGreen
-                                          : const Color(0xFF2A2A2A),
-                                      foregroundColor:
-                                          relationshipStatus != 'following'
-                                          ? Colors.black
-                                          : Colors.white,
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 16,
-                                        vertical: 0,
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      // Message Button (Only if friends)
+                                      if (relationshipStatus == 'following')
+                                        Padding(
+                                          padding: const EdgeInsets.only(right: 8.0),
+                                          child: IconButton(
+                                            onPressed: () {
+                                              context.push(
+                                                '/chat',
+                                                extra: {
+                                                  'targetUserId': userId,
+                                                  'targetUserName': data['full_name'] ?? 'Kullanıcı',
+                                                  'targetAvatarUrl': data['avatar_url'],
+                                                },
+                                              );
+                                            },
+                                            icon: const Icon(Icons.chat_bubble_outline, size: 20),
+                                            color: MatchFitTheme.accentGreen,
+                                            style: IconButton.styleFrom(
+                                              backgroundColor: const Color(0xFF242424),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius: BorderRadius.circular(18),
+                                              ),
+                                              padding: const EdgeInsets.all(8),
+                                              minimumSize: const Size(36, 36),
+                                            ),
+                                          ),
+                                        ),
+                                        
+                                      // Follow Button
+                                      ElevatedButton(
+                                        onPressed: relationshipStatus == 'blocked'
+                                            ? null
+                                            : () async {
+                                                try {
+                                                  if (relationshipStatus == 'following' || relationshipStatus == 'pending') {
+                                                    await ref
+                                                        .read(socialRepositoryProvider)
+                                                        .unfollowUser(userId);
+                                                  } else {
+                                                    await ref
+                                                        .read(socialRepositoryProvider)
+                                                        .sendFollowRequest(userId);
+                                                  }
+                                                } catch (e) {
+                                                  if (context.mounted) {
+                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                      SnackBar(
+                                                        content: Text(e.toString().contains('kabul etmiyor') ? 'Bu kullanıcı yeni takip isteklerini kabul etmiyor.' : 'Bir hata oluştu.'),
+                                                        backgroundColor: Colors.red,
+                                                      ),
+                                                    );
+                                                  }
+                                                }
+                                                ref.invalidate(
+                                                  relationshipStatusProvider(userId),
+                                                );
+                                              },
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: relationshipStatus == 'blocked'
+                                              ? Colors.red.withOpacity(0.3)
+                                              : relationshipStatus == 'pending'
+                                                  ? const Color(0xFF242424)
+                                                  : relationshipStatus == 'following'
+                                                      ? const Color(0xFF2A2A2A)
+                                                      : MatchFitTheme.accentGreen,
+                                          foregroundColor: relationshipStatus == 'blocked'
+                                              ? Colors.white54
+                                              : relationshipStatus == 'following' || relationshipStatus == 'pending'
+                                                  ? Colors.white
+                                                  : Colors.black,
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 16,
+                                            vertical: 0,
+                                          ),
+                                          minimumSize: const Size(0, 36),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(18),
+                                          ),
+                                          elevation: 0,
+                                        ),
+                                        child: Text(
+                                          relationshipStatus == 'blocked'
+                                              ? 'Engellendi'
+                                              : relationshipStatus == 'pending'
+                                                  ? 'Beklemede'
+                                                  : relationshipStatus == 'following'
+                                                      ? 'Takibi Bırak'
+                                                      : 'Takip Et',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 13,
+                                          ),
+                                        ),
                                       ),
-                                      minimumSize: const Size(0, 36),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(18),
-                                      ),
-                                      elevation: 0,
-                                    ),
-                                    child: Text(
-                                      relationshipStatus == 'following'
-                                          ? 'Following'
-                                          : 'Follow',
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 13,
-                                      ),
-                                    ),
+                                    ],
                                   ),
                               ],
                             ),
@@ -1387,7 +1441,7 @@ class _BadgesContent extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Maçları tamamlayarak, yüksek güven skoru tutturarak ve streak\'lere hâkim olarak rozet kazan.',
+            'Etkinlikleri tamamlayarak, yüksek güven skoru tutturarak ve streak\'lere hâkim olarak rozet kazan.',
             style: TextStyle(
               color: Colors.white.withOpacity(0.45),
               fontSize: 13,
@@ -2669,7 +2723,7 @@ class _XPTab extends ConsumerWidget {
               const _XPRuleItem(
                 icon: Icons.check_circle_outline,
                 title: 'Etkinliğe Katılım',
-                description: 'Sahaya çıkıp maçlara katıldığında ve başarılı check-in yaptığında ekstra XP kazanırsın.',
+                description: 'Sahaya çıkıp etkinliklere katıldığında ve başarılı check-in yaptığında ekstra XP kazanırsın.',
                 points: '+25 XP',
               ),
               const _XPRuleItem(

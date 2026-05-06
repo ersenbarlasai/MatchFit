@@ -32,6 +32,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   String? _avatarUrl;
   String? _coverUrl;
 
+  bool _acceptsFollowRequests = true;
+
   @override
   void initState() {
     super.initState();
@@ -58,6 +60,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       _selectedDistrict = profile['district'];
       _avatarUrl = profile['avatar_url'];
       _coverUrl = profile['cover_url'];
+      _acceptsFollowRequests = profile['accepts_follow_requests'] ?? true;
     }
   }
 
@@ -190,6 +193,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             'birth_date': _selectedBirthDate?.toIso8601String(),
             'city': _selectedCity,
             'district': _selectedDistrict,
+            'accepts_follow_requests': _acceptsFollowRequests,
           })
           .eq('id', userId);
 
@@ -511,6 +515,22 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                       hint: t.selectDistrict,
                       onChanged: (val) =>
                           setState(() => _selectedDistrict = val),
+                    ),
+
+                    const SizedBox(height: 32),
+                    _buildSectionHeader('Gizlilik'),
+                    
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Takip İstekleri', style: TextStyle(color: Colors.white, fontSize: 14)),
+                      subtitle: const Text('Diğer kullanıcıların size takip isteği göndermesine izin verin.', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                      value: _acceptsFollowRequests,
+                      activeColor: MatchFitTheme.accentGreen,
+                      onChanged: (val) {
+                        setState(() {
+                          _acceptsFollowRequests = val;
+                        });
+                      },
                     ),
 
                     const SizedBox(height: 48),

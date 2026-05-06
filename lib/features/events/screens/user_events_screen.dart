@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:matchfit/core/theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../repositories/event_repository.dart';
 
 final joinedEventsProvider = FutureProvider.autoDispose.family<List<Map<String, dynamic>>, String>((ref, userId) async {
+  ref.watch(eventChangeProvider);
   final sb = Supabase.instance.client;
   
   try {
@@ -21,7 +23,8 @@ final joinedEventsProvider = FutureProvider.autoDispose.family<List<Map<String, 
         .from('events')
         .select('*, sports(name), profiles(full_name, avatar_url)')
         .inFilter('id', eventIds)
-        .order('event_date', ascending: false);
+        .eq('is_archived', false)
+        .order('event_date', ascending: true);
         
     return List<Map<String, dynamic>>.from(eventsRes);
   } catch (e) {
@@ -31,11 +34,26 @@ final joinedEventsProvider = FutureProvider.autoDispose.family<List<Map<String, 
 });
 
 final hostedEventsProvider = FutureProvider.autoDispose.family<List<Map<String, dynamic>>, String>((ref, userId) async {
+  ref.watch(eventChangeProvider);
   final sb = Supabase.instance.client;
   final response = await sb
       .from('events')
       .select('*, sports(name), profiles(full_name, avatar_url)')
       .eq('host_id', userId)
+      .eq('is_archived', false)
+      .order('event_date', ascending: true);
+      
+  return List<Map<String, dynamic>>.from(response);
+});
+
+final archivedEventsProvider = FutureProvider.autoDispose.family<List<Map<String, dynamic>>, String>((ref, userId) async {
+  ref.watch(eventChangeProvider);
+  final sb = Supabase.instance.client;
+  final response = await sb
+      .from('events')
+      .select('*, sports(name), profiles(full_name, avatar_url)')
+      .eq('host_id', userId)
+      .eq('is_archived', true)
       .order('event_date', ascending: false);
       
   return List<Map<String, dynamic>>.from(response);
@@ -61,7 +79,7 @@ class _UserEventsScreenState extends ConsumerState<UserEventsScreen> with Single
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this, initialIndex: widget.initialTab);
+    _tabController = TabController(length: 3, vsync: this, initialIndex: widget.initialTab);
   }
 
   @override
@@ -164,7 +182,77 @@ class _UserEventsScreenState extends ConsumerState<UserEventsScreen> with Single
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: const Text('TAMAMLANDI', style: TextStyle(color: Colors.redAccent, fontSize: 8, fontWeight: FontWeight.bold)),
-                          )
+                          ),
+                          if (event['host_id'] == Supabase.instance.client.auth.currentUser?.id) ...[
+                            const SizedBox(width: 8),
+                            GestureDetector(
+                              onTap: () async {
+                                final isArchived = event['is_archived'] == true;
+                                final title = isArchived ? 'Arşivden Çıkar' : 'Etkinliği Arşivle';
+                                final message = isArchived 
+                                  ? 'Bu etkinliği tekrar düzenlenenler listesine almak istiyor musunuz?'
+                                  : 'Bu etkinliği listenizden kaldırmak istediğinize emin misiniz?';
+                                final actionText = isArchived ? 'Çıkar' : 'Arşivle';
+
+                                final confirm = await showDialog<bool>(
+                                  context: context,
+                                  builder: (ctx) => AlertDialog(
+                                    backgroundColor: const Color(0xFF1E1E1E),
+                                    title: Text(title, style: const TextStyle(color: Colors.white)),
+                                    content: Text(message, style: const TextStyle(color: Colors.white70)),
+                                    actions: [
+                                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Vazgeç')),
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(ctx, true), 
+                                        child: Text(actionText, style: TextStyle(color: isArchived ? MatchFitTheme.accentGreen : Colors.redAccent))
+                                      ),
+                                    ],
+                                  ),
+                                );
+                                if (confirm == true) {
+                                  try {
+                                    if (isArchived) {
+                                      await ref.read(eventRepositoryProvider).unarchiveEvent(event['id']);
+                                    } else {
+                                      await ref.read(eventRepositoryProvider).archiveEvent(event['id']);
+                                    }
+                                    ref.read(eventChangeProvider.notifier).emit(); // Force refresh
+                                  } catch (e) {
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('İşlem yapılamadı: $e')),
+                                      );
+                                    }
+                                  }
+                                }
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: (event['is_archived'] == true ? MatchFitTheme.accentGreen : Colors.blueAccent).withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      event['is_archived'] == true ? Icons.unarchive_outlined : Icons.archive_outlined, 
+                                      color: event['is_archived'] == true ? MatchFitTheme.accentGreen : Colors.blueAccent, 
+                                      size: 10
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      event['is_archived'] == true ? 'ARŞİVDEN ÇIKAR' : 'ARŞİVLE', 
+                                      style: TextStyle(
+                                        color: event['is_archived'] == true ? MatchFitTheme.accentGreen : Colors.blueAccent, 
+                                        fontSize: 8, 
+                                        fontWeight: FontWeight.bold
+                                      )
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
                         const Spacer(),
                         const Icon(Icons.people_outline, color: Colors.white54, size: 14),
@@ -229,6 +317,7 @@ class _UserEventsScreenState extends ConsumerState<UserEventsScreen> with Single
           tabs: const [
             Tab(text: 'Katılınan'),
             Tab(text: 'Düzenlenen'),
+            Tab(text: 'Arşivlenen'),
           ],
         ),
       ),
@@ -237,6 +326,7 @@ class _UserEventsScreenState extends ConsumerState<UserEventsScreen> with Single
         children: [
           _buildList(ref.watch(joinedEventsProvider(widget.userId)), 'Henüz bir etkinliğe katılmadı.'),
           _buildList(ref.watch(hostedEventsProvider(widget.userId)), 'Henüz bir etkinlik düzenlemedi.'),
+          _buildList(ref.watch(archivedEventsProvider(widget.userId)), 'Arşivlenmiş etkinlik bulunmuyor.'),
         ],
       ),
     );

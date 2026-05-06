@@ -14,6 +14,9 @@ import 'package:matchfit/core/widgets/avatar_widget.dart';
 import 'package:matchfit/core/providers/profile_provider.dart';
 import 'package:matchfit/core/l10n/app_localizations.dart';
 import 'dart:async';
+import '../widgets/map_location_picker.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:geocoding/geocoding.dart';
 
 class CreateEventScreen extends ConsumerStatefulWidget {
   const CreateEventScreen({super.key});
@@ -104,6 +107,54 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
         return;
       }
       setState(() => _currentStep = 3);
+    }
+  }
+
+  Future<void> _openMapPicker() async {
+    if (selectedProvince == null || selectedDistrict == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Lütfen önce il ve ilçe seçin')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      final query = '$selectedDistrict, $selectedProvince, $selectedCountry';
+      final results = await _searchService.search(query);
+
+      LatLng center;
+      if (results.isNotEmpty) {
+        center = LatLng(results.first.lat, results.first.lng);
+      } else {
+        // Bursa default center if search fails
+        center = const LatLng(40.1885, 29.0610);
+      }
+
+      if (!mounted) return;
+      final result = await Navigator.push<Map<String, dynamic>>(
+        context,
+        MaterialPageRoute(
+          builder: (context) => MapLocationPicker(
+            initialCenter: center,
+            initialAddress: _venueController.text.isNotEmpty ? _venueController.text : null,
+          ),
+        ),
+      );
+
+      if (result != null) {
+        setState(() {
+          _venueController.text = result['address'];
+          _selectedLat = result['lat'];
+          _selectedLng = result['lng'];
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Harita açılamadı: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -615,6 +666,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
           hint: t.venueSearchHint,
           onChanged: _onLocationChanged,
           prefixIcon: Icons.place_outlined,
+          onTap: _openMapPicker,
         ),
 
         if (_suggestions.isNotEmpty)
@@ -896,11 +948,15 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
     int maxLines = 1,
     Function(String)? onChanged,
     IconData? prefixIcon,
+    VoidCallback? onTap,
+    bool readOnly = false,
   }) {
     return TextField(
       controller: controller,
       maxLines: maxLines,
       onChanged: onChanged,
+      onTap: onTap,
+      readOnly: readOnly || (onTap != null),
       style: const TextStyle(color: Colors.white),
       decoration: InputDecoration(
         hintText: hint,

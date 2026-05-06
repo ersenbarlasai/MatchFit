@@ -16,13 +16,13 @@ class MainShell extends ConsumerStatefulWidget {
 }
 
 class _MainShellState extends ConsumerState<MainShell> {
-  final _routes = ['/home', '/explore', '/create-event', '/notifications', '/profile'];
+  final _routes = ['/home', '/explore', '/create-event', '/messages', '/profile'];
 
   int _calculateSelectedIndex(BuildContext context) {
     final String location = GoRouterState.of(context).uri.path;
     if (location.startsWith('/explore')) return 1;
     if (location.startsWith('/create-event')) return 2;
-    if (location.startsWith('/notifications')) return 3;
+    if (location.startsWith('/messages')) return 3;
     if (location.startsWith('/profile')) return 4;
     return 0;
   }
@@ -37,7 +37,7 @@ class _MainShellState extends ConsumerState<MainShell> {
 
     return Scaffold(
       body: widget.child,
-      extendBody: true,
+      extendBody: false,
       bottomNavigationBar: _buildBottomNav(context, currentIndex),
     );
   }

@@ -5,20 +5,41 @@ import 'package:matchfit/core/theme.dart';
 import 'package:matchfit/core/l10n/app_localizations.dart';
 import '../repositories/notification_repository.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:matchfit/features/profile/repositories/social_repository.dart';
 import '../../events/repositories/event_repository.dart';
 
-class NotificationScreen extends ConsumerWidget {
+class NotificationScreen extends ConsumerStatefulWidget {
   const NotificationScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<NotificationScreen> createState() => _NotificationScreenState();
+}
+
+class _NotificationScreenState extends ConsumerState<NotificationScreen> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+    _tabController.addListener(() {
+      setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final notificationsAsync = ref.watch(notificationsProvider);
     final t = AppLocalizations.of(context);
 
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
+    return Scaffold(
         backgroundColor: const Color(0xFF121212),
         appBar: AppBar(
           backgroundColor: Colors.transparent,
@@ -64,13 +85,14 @@ class NotificationScreen extends ConsumerWidget {
                 }
               },
               itemBuilder: (context) => [
-                PopupMenuItem(
-                  value: 'mark_all_read',
-                  child: Text(
-                    t.markAllRead,
-                    style: const TextStyle(color: Colors.white),
+                if (_tabController.index == 0)
+                  PopupMenuItem(
+                    value: 'mark_all_read',
+                    child: Text(
+                      t.markAllRead,
+                      style: const TextStyle(color: Colors.white),
+                    ),
                   ),
-                ),
                 PopupMenuItem(
                   value: 'delete_all',
                   child: Text(
@@ -82,28 +104,35 @@ class NotificationScreen extends ConsumerWidget {
             ),
           ],
           bottom: TabBar(
+            controller: _tabController,
             indicatorColor: MatchFitTheme.accentGreen,
             labelColor: MatchFitTheme.accentGreen,
             unselectedLabelColor: Colors.white54,
             tabs: [
               Tab(text: t.unread),
               Tab(text: t.read),
+              Tab(text: 'Arşiv'),
             ],
           ),
         ),
         body: notificationsAsync.when(
           data: (notifications) {
             final unread = notifications
-                .where((n) => n['is_read'] != true)
+                .where((n) => n['is_read'] != true && n['is_archived'] != true)
                 .toList();
             final readList = notifications
-                .where((n) => n['is_read'] == true)
+                .where((n) => n['is_read'] == true && n['is_archived'] != true)
+                .toList();
+            final archivedList = notifications
+                .where((n) => n['is_archived'] == true)
                 .toList();
 
             return TabBarView(
+              controller: _tabController,
               children: [
                 _buildList(unread, t.great, t.noUnreadNotifications),
                 _buildList(readList, t.noNotifications, ''),
+                _buildList(archivedList, 'Arşiv Boş', 'Arşivlenmiş bildirim yok'),
               ],
             );
           },
@@ -117,7 +146,6 @@ class NotificationScreen extends ConsumerWidget {
             ),
           ),
         ),
-      ),
     );
   }
 
@@ -221,26 +249,66 @@ class _NotificationItemState extends ConsumerState<_NotificationItem> {
         isRead ||
         _isHandled ||
         (type == 'follow_request' && !hasPendingRequest && !_isHandled);
+    final isArchived = widget.notification['is_archived'] as bool? ?? false;
 
-    return Dismissible(
+    return Slidable(
       key: Key(widget.notification['id'].toString()),
-      direction: DismissDirection.endToStart,
-      background: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        decoration: BoxDecoration(
-          color: Colors.redAccent.withOpacity(0.8),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 24),
-        child: const Icon(Icons.delete_outline, color: Colors.white, size: 28),
+      endActionPane: ActionPane(
+        motion: const ScrollMotion(),
+        extentRatio: 0.5,
+        children: [
+          if (!isArchived)
+            SlidableAction(
+              onPressed: (context) {
+                ref
+                    .read(notificationRepositoryProvider)
+                    .archiveNotification(widget.notification['id']);
+                ref.invalidate(notificationsProvider);
+              },
+              backgroundColor: Colors.blueAccent.withOpacity(0.8),
+              foregroundColor: Colors.white,
+              icon: Icons.archive_outlined,
+              label: 'Arşivle',
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(20),
+                bottomLeft: Radius.circular(20),
+              ),
+            )
+          else
+            SlidableAction(
+              onPressed: (context) {
+                ref
+                    .read(notificationRepositoryProvider)
+                    .unarchiveNotification(widget.notification['id']);
+                ref.invalidate(notificationsProvider);
+              },
+              backgroundColor: Colors.orangeAccent.withOpacity(0.8),
+              foregroundColor: Colors.white,
+              icon: Icons.unarchive_outlined,
+              label: 'Geri Al',
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(20),
+                bottomLeft: Radius.circular(20),
+              ),
+            ),
+          SlidableAction(
+            onPressed: (context) {
+              ref
+                  .read(notificationRepositoryProvider)
+                  .deleteNotification(widget.notification['id']);
+              ref.invalidate(notificationsProvider);
+            },
+            backgroundColor: Colors.redAccent.withOpacity(0.8),
+            foregroundColor: Colors.white,
+            icon: Icons.delete_outline,
+            label: 'Sil',
+            borderRadius: const BorderRadius.only(
+              topRight: Radius.circular(20),
+              bottomRight: Radius.circular(20),
+            ),
+          ),
+        ],
       ),
-      onDismissed: (_) {
-        ref
-            .read(notificationRepositoryProvider)
-            .deleteNotification(widget.notification['id']);
-        ref.invalidate(notificationsProvider);
-      },
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
@@ -288,9 +356,18 @@ class _NotificationItemState extends ConsumerState<_NotificationItem> {
                       ),
                     );
                   }
-                } else if (senderId != null && context.mounted) {
-                  context.push('/user-profile', extra: senderId);
-                }
+                  } else if (type == 'new_message' && senderId != null && context.mounted) {
+                    context.push(
+                      '/chat',
+                      extra: {
+                        'targetUserId': senderId,
+                        'targetUserName': senderName,
+                        'targetAvatarUrl': senderProfile?['avatar_url'],
+                      },
+                    );
+                  } else if (senderId != null && context.mounted) {
+                    context.push('/user-profile', extra: senderId);
+                  }
               },
               leading: _getIconForType(type),
               title: Row(
@@ -532,6 +609,8 @@ class _NotificationItemState extends ConsumerState<_NotificationItem> {
         return 'Takip İsteği';
       case 'follow_approved':
         return 'Takip İsteği Kabul Edildi';
+      case 'new_message':
+        return 'Yeni Mesaj';
       default:
         return 'Bildirim';
     }
@@ -562,6 +641,10 @@ class _NotificationItemState extends ConsumerState<_NotificationItem> {
       case 'join_rejected':
         iconData = Icons.cancel_outlined;
         color = Colors.redAccent;
+        break;
+      case 'new_message':
+        iconData = Icons.chat_bubble_outline;
+        color = MatchFitTheme.accentGreen;
         break;
       default:
         iconData = Icons.notifications_outlined;

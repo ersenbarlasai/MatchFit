@@ -22,8 +22,11 @@ import '../features/profile/screens/connections_screen.dart';
 import '../features/events/screens/user_events_screen.dart';
 import '../features/ranking_engine/screens/leaderboard_screen.dart';
 import '../features/coach_engine/screens/become_coach_screen.dart';
+import '../features/explore/screens/user_search_screen.dart';
 import '../features/coach_engine/screens/coach_onboarding_info_screen.dart';
 import '../features/coach_engine/screens/coach_management_screen.dart';
+import '../features/chat/screens/chat_screen.dart';
+import '../features/chat/screens/conversations_screen.dart';
 import '../core/widgets/main_shell.dart';
 
 final GoRouter appRouter = GoRouter(
@@ -68,109 +71,136 @@ final GoRouter appRouter = GoRouter(
           builder: (context, state) => const NotificationScreen(),
         ),
         GoRoute(
+          path: '/messages',
+          builder: (context, state) => const ConversationsScreen(),
+        ),
+        GoRoute(
           path: '/profile',
           builder: (context, state) => const ProfileScreen(),
+        ),
+        GoRoute(
+          path: '/leaderboard',
+          builder: (context, state) => const LeaderboardScreen(),
+        ),
+        GoRoute(
+          path: '/coach-info',
+          builder: (context, state) => const CoachOnboardingInfoScreen(),
+        ),
+        GoRoute(
+          path: '/become-coach',
+          builder: (context, state) => const BecomeCoachScreen(),
+        ),
+        GoRoute(
+          path: '/admin/coaches',
+          builder: (context, state) => const CoachManagementScreen(),
+        ),
+        GoRoute(
+          path: '/event-detail',
+          builder: (context, state) {
+            final event = _extraMap(state);
+            if (event == null) return const _MissingRouteDataScreen();
+            return EventDetailScreen(event: event);
+          },
+        ),
+        GoRoute(
+          path: '/privacy-settings',
+          builder: (context, state) => const PrivacySettingsScreen(),
+        ),
+        GoRoute(
+          path: '/share-event-post',
+          builder: (context, state) {
+            final event = _extraMap(state);
+            if (event == null) return const _MissingRouteDataScreen();
+            return ShareEventPostScreen(event: event);
+          },
+        ),
+        GoRoute(
+          path: '/edit-event',
+          builder: (context, state) {
+            final event = _extraMap(state);
+            if (event == null) return const _MissingRouteDataScreen();
+            return EditEventScreen(event: event);
+          },
+        ),
+        GoRoute(
+          path: '/user-profile',
+          builder: (context, state) {
+            final extra = state.extra;
+            final userId = extra is String ? extra : null;
+            return ProfileScreen(userId: userId);
+          },
+        ),
+        GoRoute(
+          path: '/edit-profile',
+          builder: (context, state) => const EditProfileScreen(),
+        ),
+        GoRoute(
+          path: '/chat',
+          builder: (context, state) {
+            final extra = state.extra as Map<String, dynamic>?;
+            final targetUserId = extra?['targetUserId'] as String?;
+            final targetUserName = extra?['targetUserName'] as String? ?? 'Kullanıcı';
+            final targetAvatarUrl = extra?['targetAvatarUrl'] as String?;
+
+            if (targetUserId == null) {
+              return const _MissingRouteDataScreen();
+            }
+            return ChatScreen(
+              targetUserId: targetUserId,
+              targetUserName: targetUserName,
+              targetAvatarUrl: targetAvatarUrl,
+            );
+          },
+        ),
+        GoRoute(
+          path: '/user-search',
+          builder: (context, state) => const UserSearchScreen(),
+        ),
+        GoRoute(
+          path: '/friend-upcoming-events',
+          builder: (context, state) {
+            final extra = _extraMap(state);
+            final friendId = _stringExtra(extra, 'friendId');
+            final friendName = _stringExtra(extra, 'friendName');
+            if (friendId == null || friendName == null) {
+              return const _MissingRouteDataScreen();
+            }
+            return FriendUpcomingEventsScreen(
+              friendId: friendId,
+              friendName: friendName,
+              friendAvatar: _stringExtra(extra, 'friendAvatar'),
+            );
+          },
+        ),
+        GoRoute(
+          path: '/connections',
+          builder: (context, state) {
+            final extra = _extraMap(state);
+            final userId = _stringExtra(extra, 'userId');
+            if (userId == null) return const _MissingRouteDataScreen();
+            return ConnectionsScreen(
+              userId: userId,
+              initialTab: _intExtra(extra, 'initialTab') ?? 0,
+            );
+          },
+        ),
+        GoRoute(
+          path: '/user-events',
+          builder: (context, state) {
+            final extra = _extraMap(state);
+            final userId = _stringExtra(extra, 'userId');
+            if (userId == null) return const _MissingRouteDataScreen();
+            return UserEventsScreen(
+              userId: userId,
+              initialTab: _intExtra(extra, 'initialTab') ?? 0,
+            );
+          },
         ),
       ],
     ),
 
     // ── Standalone routes (no shell) ──
-    GoRoute(
-      path: '/leaderboard',
-      builder: (context, state) => const LeaderboardScreen(),
-    ),
-    GoRoute(
-      path: '/coach-info',
-      builder: (context, state) => const CoachOnboardingInfoScreen(),
-    ),
-    GoRoute(
-      path: '/become-coach',
-      builder: (context, state) => const BecomeCoachScreen(),
-    ),
-    GoRoute(
-      path: '/admin/coaches',
-      builder: (context, state) => const CoachManagementScreen(),
-    ),
-    GoRoute(
-      path: '/event-detail',
-      builder: (context, state) {
-        final event = _extraMap(state);
-        if (event == null) return const _MissingRouteDataScreen();
-        return EventDetailScreen(event: event);
-      },
-    ),
-    GoRoute(
-      path: '/privacy-settings',
-      builder: (context, state) => const PrivacySettingsScreen(),
-    ),
-    GoRoute(
-      path: '/share-event-post',
-      builder: (context, state) {
-        final event = _extraMap(state);
-        if (event == null) return const _MissingRouteDataScreen();
-        return ShareEventPostScreen(event: event);
-      },
-    ),
-    GoRoute(
-      path: '/edit-event',
-      builder: (context, state) {
-        final event = _extraMap(state);
-        if (event == null) return const _MissingRouteDataScreen();
-        return EditEventScreen(event: event);
-      },
-    ),
-    GoRoute(
-      path: '/user-profile',
-      builder: (context, state) {
-        final extra = state.extra;
-        final userId = extra is String ? extra : null;
-        return ProfileScreen(userId: userId);
-      },
-    ),
-    GoRoute(
-      path: '/edit-profile',
-      builder: (context, state) => const EditProfileScreen(),
-    ),
-    GoRoute(
-      path: '/friend-upcoming-events',
-      builder: (context, state) {
-        final extra = _extraMap(state);
-        final friendId = _stringExtra(extra, 'friendId');
-        final friendName = _stringExtra(extra, 'friendName');
-        if (friendId == null || friendName == null) {
-          return const _MissingRouteDataScreen();
-        }
-        return FriendUpcomingEventsScreen(
-          friendId: friendId,
-          friendName: friendName,
-          friendAvatar: _stringExtra(extra, 'friendAvatar'),
-        );
-      },
-    ),
-    GoRoute(
-      path: '/connections',
-      builder: (context, state) {
-        final extra = _extraMap(state);
-        final userId = _stringExtra(extra, 'userId');
-        if (userId == null) return const _MissingRouteDataScreen();
-        return ConnectionsScreen(
-          userId: userId,
-          initialTab: _intExtra(extra, 'initialTab') ?? 0,
-        );
-      },
-    ),
-    GoRoute(
-      path: '/user-events',
-      builder: (context, state) {
-        final extra = _extraMap(state);
-        final userId = _stringExtra(extra, 'userId');
-        if (userId == null) return const _MissingRouteDataScreen();
-        return UserEventsScreen(
-          userId: userId,
-          initialTab: _intExtra(extra, 'initialTab') ?? 0,
-        );
-      },
-    ),
+    // Routes removed as they are now inside ShellRoute
   ],
 );
 

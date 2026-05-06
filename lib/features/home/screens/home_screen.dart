@@ -19,6 +19,21 @@ import 'package:matchfit/features/economy_engine/providers/economy_engine_provid
 
 // ── Providers ──────────────────────────────────────────────────────
 
+class HomeFilterNotifier extends Notifier<String> {
+  @override
+  String build() => 'Yakınımda';
+
+  void setFilter(String val) => state = val;
+}
+
+final homeFilterProvider = NotifierProvider<HomeFilterNotifier, String>(
+  HomeFilterNotifier.new,
+);
+
+final randomBannerIndexProvider = Provider.autoDispose<int>((ref) {
+  return DateTime.now().millisecondsSinceEpoch;
+});
+
 final locationNameProvider = FutureProvider.autoDispose<String>((ref) async {
   final userLoc = await ref.watch(userLocationProvider.future);
   if (userLoc == null) return 'Konum Bulunamadı';
@@ -179,7 +194,7 @@ final socialPressureProvider = FutureProvider.autoDispose<List<Map<String, dynam
     // 2. Get recent event participation of friends (only upcoming)
     final recentParticipants = await sb
         .from('event_participants')
-        .select('created_at, user_id, events!inner(title, event_date, status, sports(name)), profiles!event_participants_user_id_fkey(full_name, avatar_url)')
+        .select('created_at, user_id, events!inner(*, sports(name, category), profiles(full_name, trust_score, avatar_url)), profiles!event_participants_user_id_fkey(full_name, avatar_url)')
         .inFilter('user_id', friendIds.toList())
         .gte('events.event_date', todayStr)
         .neq('events.status', 'cancelled')
@@ -189,7 +204,7 @@ final socialPressureProvider = FutureProvider.autoDispose<List<Map<String, dynam
     // 3. Get recently created events by friends (only upcoming)
     final recentEvents = await sb
         .from('events')
-        .select('created_at, host_id, title, event_date, status, sports(name), profiles!events_host_id_fkey(full_name, avatar_url)')
+        .select('*, sports(name, category), profiles!events_host_id_fkey(full_name, trust_score, avatar_url)')
         .inFilter('host_id', friendIds.toList())
         .gte('event_date', todayStr)
         .neq('status', 'cancelled')
@@ -209,9 +224,10 @@ final socialPressureProvider = FutureProvider.autoDispose<List<Map<String, dynam
           'user_id': p['user_id'],
           'full_name': profile['full_name'],
           'avatar_url': profile['avatar_url'],
-          'event_title': event['title'] ?? '$sportName Maçı',
+          'event_title': event['title'] ?? '$sportName Etkinliği',
           'sport_name': sportName,
           'created_at': DateTime.parse(p['created_at']).toLocal(),
+          'event_data': event,
         });
       }
     }
@@ -226,9 +242,10 @@ final socialPressureProvider = FutureProvider.autoDispose<List<Map<String, dynam
           'user_id': e['host_id'],
           'full_name': profile['full_name'],
           'avatar_url': profile['avatar_url'],
-          'event_title': e['title'] ?? '$sportName Maçı',
+          'event_title': e['title'] ?? '$sportName Etkinliği',
           'sport_name': sportName,
           'created_at': DateTime.parse(e['created_at']).toLocal(),
+          'event_data': e,
         });
       }
     }
@@ -285,80 +302,38 @@ final recommendedEventsProvider =
       if (user == null) return [];
 
       try {
-        final activityResponse = await Supabase.instance.client
-            .from('event_participants')
-            .select('events(sport_id, sports(category))')
+        final userSportsResponse = await Supabase.instance.client
+            .from('user_sports_preferences')
+            .select('sport_id')
             .eq('user_id', user.id);
+            
+        final preferredSports = List<Map<String, dynamic>>.from(userSportsResponse)
+            .map((e) => e['sport_id'])
+            .where((id) => id != null)
+            .cast<int>()
+            .toList();
 
-        final hostedResponse = await Supabase.instance.client
-            .from('events')
-            .select('sport_id, sports(category)')
-            .eq('host_id', user.id);
-
-        final activity = List<Map<String, dynamic>>.from(activityResponse);
-        final hosted = List<Map<String, dynamic>>.from(hostedResponse);
-
-        final preferredSports = {
-          ...activity.map((e) => e['events']?['sport_id']),
-          ...hosted.map((e) => e['sport_id']),
-        }.where((id) => id != null).cast<int>().toList();
-
-        final preferredCategories = {
-          ...activity.map((e) => e['events']?['sports']?['category']),
-          ...hosted.map((e) => e['sports']?['category']),
-        }.where((cat) => cat != null).cast<String>().toList();
-
-        dynamic query = Supabase.instance.client
-            .from('events')
-            .select(
-              '*, sports(name, category), profiles(full_name, avatar_url)',
-            )
-            .eq('status', 'open')
-            .neq('host_id', user.id);
-
-        if (preferredSports.isNotEmpty) {
-          query = query.filter(
-            'sport_id',
-            'in',
-            '(${preferredSports.join(',')})',
-          );
-        } else if (preferredCategories.isNotEmpty) {
-          query = query.filter(
-            'sports.category',
-            'in',
-            '(${preferredCategories.map((c) => "\"$c\"").join(',')})',
-          );
-        }
-
-        final response = await query.limit(10);
-        final allEvents = List<Map<String, dynamic>>.from(response);
+        final userLoc = await ref.watch(userLocationProvider.future);
+        final allNearbyEvents = await ref.read(eventRepositoryProvider).getNearbyEvents(
+              lat: userLoc?.latitude,
+              lng: userLoc?.longitude,
+              radius: 100000, 
+            );
 
         final joinedIdsResponse = await Supabase.instance.client
             .from('event_participants')
             .select('event_id')
             .eq('user_id', user.id);
-        final joinedIds = List<Map<String, dynamic>>.from(
-          joinedIdsResponse,
-        ).map((e) => e['event_id'].toString()).toList();
+        final joinedIds = List<Map<String, dynamic>>.from(joinedIdsResponse)
+            .map((e) => e['event_id'].toString()).toList();
 
-        final filtered = allEvents
+        var filtered = allNearbyEvents
+            .where((e) => e['host_id'] != user.id)
             .where((e) => !joinedIds.contains(e['id'].toString()))
             .toList();
 
-        if (filtered.isEmpty &&
-            (preferredSports.isNotEmpty || preferredCategories.isNotEmpty)) {
-          final fallback = await Supabase.instance.client
-              .from('events')
-              .select(
-                '*, sports(name, category), profiles(full_name, avatar_url)',
-              )
-              .eq('status', 'open')
-              .neq('host_id', user.id)
-              .limit(5);
-          final fallbackList = List<Map<String, dynamic>>.from(fallback);
-          return fallbackList
-              .where((e) => !joinedIds.contains(e['id'].toString()))
-              .toList();
+        if (preferredSports.isNotEmpty) {
+          filtered = filtered.where((e) => preferredSports.contains(e['sport_id'])).toList();
         }
 
         return filtered;
@@ -384,48 +359,24 @@ class HomeScreen extends ConsumerWidget {
             children: [
               _buildHeader(context, ref),
               const SizedBox(height: 16),
-              _buildActionButtons(context, ref),
+              _buildHeroEvent(context, ref),
               const SizedBox(height: 24),
-              _buildSocialPressureSection(context, ref),
-              const SizedBox(height: 32),
-              _buildSectionTitle('Senin İçin Etkinlikler'),
-              _buildRecommendedEvents(context),
-              const SizedBox(height: 32),
+              _buildCompactSocialFeed(context, ref),
+              const SizedBox(height: 24),
+              _buildSectionHeader('Fırsatlar ve Ödüller', null),
+              _buildOpportunities(context),
+              const SizedBox(height: 24),
+              _buildSectionHeader('Senin İçin Etkinlikler', 'Tümünü Gör', onActionTap: () => context.go('/explore')),
+              _buildRecommendedEventsList(context, ref),
+              const SizedBox(height: 24),
+              _buildSectionHeader('Yakındaki Etkinlikler', 'Filtrele'),
               _buildNearbyEventsSection(context, ref),
-              const SizedBox(height: 32),
-              _buildSectionTitle('Sana Uygun Kişiler'),
+              const SizedBox(height: 24),
+              _buildSectionHeader('Spor Eşleşmeleri', 'Tümü'),
               _buildPeopleForYou(context, ref),
-              const SizedBox(height: 32),
-              _buildWeeklyGoal(context),
-              const SizedBox(height: 32),
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                child: Row(
-                  children: const [
-                    Text(
-                      'Onaylı Antrenörler',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 18,
-                      ),
-                    ),
-                    SizedBox(width: 6),
-                    Icon(Icons.verified, color: Colors.blue, size: 16),
-                  ],
-                ),
-              ),
+              const SizedBox(height: 24),
+              _buildSectionHeader('Sana Uygun Eğitmenler', null),
               _buildVerifiedCoaches(context),
-              const SizedBox(height: 32),
-              _buildSponsoredAd(context),
-              const SizedBox(height: 32),
-              _buildTrendingSports(context, ref),
-              const SizedBox(height: 32),
-              _buildSectionTitle('Aktiviteler'),
-              _buildActivities(context),
               const SizedBox(height: 100),
             ],
           ),
@@ -445,6 +396,7 @@ class HomeScreen extends ConsumerWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           GestureDetector(
             onTap: () => context.go('/profile'),
@@ -452,15 +404,15 @@ class HomeScreen extends ConsumerWidget {
               data: (p) => AvatarWidget(
                 name: p?['full_name'] ?? 'E',
                 avatarUrl: p?['avatar_url'],
-                radius: 20,
+                radius: 28,
                 editable: false,
               ),
               loading: () => const CircleAvatar(
-                radius: 20,
+                radius: 28,
                 backgroundColor: Color(0xFF1E1E1E),
               ),
               error: (_, __) => const CircleAvatar(
-                radius: 20,
+                radius: 28,
                 backgroundColor: Color(0xFF1E1E1E),
               ),
             ),
@@ -530,6 +482,76 @@ class HomeScreen extends ConsumerWidget {
                         ),
                       ],
                     ),
+                    const SizedBox(height: 8),
+                    Consumer(
+                      builder: (context, ref, child) {
+                        final recommendedAsync = ref.watch(recommendedEventsProvider);
+                        final randomIndex = ref.watch(randomBannerIndexProvider);
+                        
+                        return GestureDetector(
+                          onTap: () {
+                            // Go to explore tab to see more events
+                            context.go('/explore');
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: MatchFitTheme.accentGreen.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: recommendedAsync.maybeWhen(
+                              data: (events) {
+                                if (events.isNotEmpty) {
+                                  final messages = [
+                                    'Bugün sana uygun ${events.length} yeni etkinlik var ✨',
+                                    'Şehrindeki ${events.length} fırsatı kaçırma 🎯',
+                                    'Sana özel ${events.length} spor etkinliği bulundu 🏃',
+                                    'Harekete geç, ${events.length} etkinlik seni bekliyor 🔥',
+                                  ];
+                                  final msg = messages[randomIndex % messages.length];
+                                  
+                                  return Text(
+                                    msg,
+                                    style: const TextStyle(
+                                      color: MatchFitTheme.accentGreen,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  );
+                                }
+                                
+                                final emptyMessages = [
+                                  'Haritayı aç ve yeni etkinlikleri keşfet 🗺️',
+                                  'Bugün spor yapmak için harika bir gün 🏃‍♂️',
+                                  'İlk adımı sen at, bir etkinlik oluştur! 👑',
+                                  'Puanlarını artırmak için fırsatlara göz at 🔥',
+                                  'Spor arkadaşların seni bekliyor 🤝',
+                                  'Hemen bir spor dalı seç ve harekete geç 💪',
+                                ];
+                                final emptyMsg = emptyMessages[randomIndex % emptyMessages.length];
+                                
+                                return Text(
+                                  emptyMsg,
+                                  style: const TextStyle(
+                                    color: MatchFitTheme.accentGreen,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                );
+                              },
+                              orElse: () => const Text(
+                                'Sana özel öneriler hazırlanıyor... ⏳',
+                                style: TextStyle(
+                                  color: MatchFitTheme.accentGreen,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
                   ],
                 );
               },
@@ -570,7 +592,7 @@ class HomeScreen extends ConsumerWidget {
           ),
           IconButton(
             icon: const Icon(Icons.search, color: Colors.white),
-            onPressed: () {},
+            onPressed: () => context.push('/user-search'),
           ),
           Stack(
             children: [
@@ -598,60 +620,178 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildActionButtons(BuildContext context, WidgetRef ref) {
-    final friendsAsync = ref.watch(friendsWithUpcomingEventsProvider);
+  Widget _buildSectionHeader(String title, String? actionText, {IconData? icon, Color? iconColor, VoidCallback? onActionTap}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 18,
+                ),
+              ),
+              if (icon != null) ...[
+                const SizedBox(width: 8),
+                Icon(icon, color: iconColor ?? Colors.white, size: 18),
+              ],
+            ],
+          ),
+          if (actionText != null)
+            GestureDetector(
+              onTap: onActionTap,
+              child: Text(
+                actionText,
+                style: const TextStyle(
+                  color: MatchFitTheme.accentGreen,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 
-    return friendsAsync.when(
-      data: (friends) {
-        if (friends.isEmpty) return const SizedBox.shrink();
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            children: friends
-                .map(
-                  (f) => Padding(
-                    padding: const EdgeInsets.only(right: 12),
-                    child: GestureDetector(
-                      onTap: () {
-                        context.push(
-                          '/friend-upcoming-events',
-                          extra: {
-                            'friendId': f['id'],
-                            'friendName': f['full_name'],
-                            'friendAvatar': f['avatar_url'],
-                          },
-                        );
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(2),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: MatchFitTheme.accentGreen,
-                            width: 2,
+  Widget _buildHeroEvent(BuildContext context, WidgetRef ref) {
+    final recommendedAsync = ref.watch(recommendedEventsProvider);
+
+    return recommendedAsync.when(
+      data: (events) {
+        if (events.isEmpty) return const SizedBox.shrink();
+        final event = events.first;
+        final title = event['title'] as String? ?? 'Öne Çıkan Etkinlik';
+        final sport = event['sports']?['name'] as String? ?? 'Spor';
+        final distMeters = (event['distance'] as num?)?.toDouble() ?? 0.0;
+        final distance = distMeters > 0 ? '${(distMeters / 1000).toStringAsFixed(1)} km' : 'Bölgene yakın';
+        
+        String time = '?';
+        if (event['start_time'] != null) {
+          final st = event['start_time'].toString();
+          time = st.length >= 5 ? (st.contains('T') ? st.split('T')[1].substring(0, 5) : st.substring(0, 5)) : st;
+        }
+        final participants = int.tryParse(event['participant_count']?.toString() ?? '') ?? 1;
+        final maxP = int.tryParse(event['max_participants']?.toString() ?? '') ?? 10;
+        final verified = (int.tryParse(event['profiles']?['trust_score']?.toString() ?? '') ?? 0) > 80;
+
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1A1A1A),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: MatchFitTheme.accentGreen.withOpacity(0.3), width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: MatchFitTheme.accentGreen.withOpacity(0.05),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: MatchFitTheme.accentGreen.withOpacity(0.1),
+                  borderRadius: const BorderRadius.only(topLeft: Radius.circular(18), topRight: Radius.circular(18)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.local_fire_department, color: MatchFitTheme.accentGreen, size: 14),
+                    const SizedBox(width: 4),
+                    const Text('Bugün Sana En Uygun', style: TextStyle(color: MatchFitTheme.accentGreen, fontSize: 11, fontWeight: FontWeight.bold)),
+                    const Spacer(),
+                    if (verified)
+                      const Icon(Icons.verified, color: Colors.blue, size: 14),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2A2A2A),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Center(child: Text(_getSportEmoji(sport), style: const TextStyle(fontSize: 24))),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                        child: AvatarWidget(
-                          name: f['full_name'] ?? 'P',
-                          avatarUrl: f['avatar_url'],
-                          radius:
-                              24, // Boyutu biraz büyüttük, daha belirgin olması için
-                        ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '$distance • $time • $participants/$maxP Kişi',
+                            style: const TextStyle(color: Colors.white54, fontSize: 12),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-                )
-                .toList(),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: ElevatedButton(
+                        onPressed: () {},
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: MatchFitTheme.accentGreen,
+                          foregroundColor: Colors.black,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        child: const Text('Katıl', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 1,
+                      child: OutlinedButton(
+                        onPressed: () => context.push('/event-detail', extra: event),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Colors.white24),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        child: const Text('Detay', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         );
       },
-      loading: () => const SizedBox.shrink(),
+      loading: () => const SizedBox(height: 140, child: Center(child: CircularProgressIndicator())),
       error: (_, __) => const SizedBox.shrink(),
     );
   }
 
-  Widget _buildSocialPressureSection(BuildContext context, WidgetRef ref) {
+  Widget _buildCompactSocialFeed(BuildContext context, WidgetRef ref) {
     final activitiesAsync = ref.watch(socialPressureProvider);
 
     return activitiesAsync.when(
@@ -661,82 +801,65 @@ class HomeScreen extends ConsumerWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  const Icon(Icons.people_alt_outlined, color: Colors.white54, size: 18),
-                  const SizedBox(width: 8),
-                  const Text(
-                    'Ağındaki Hareketler',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                    ),
-                  ),
-                  const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.red.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Row(
-                      children: [
-                        Icon(Icons.local_fire_department, color: Colors.red, size: 12),
-                        SizedBox(width: 4),
-                        Text('Canlı', style: TextStyle(color: Colors.red, fontSize: 10, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+            _buildSectionHeader(
+              'Arkadaşların Ne Yapıyor',
+              'Tümünü Gör',
+              icon: Icons.local_fire_department,
+              iconColor: Colors.orange,
             ),
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E1E1E),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white10),
-              ),
-              child: ListView.separated(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(0),
+            SizedBox(
+              height: 72,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 itemCount: activities.length,
-                separatorBuilder: (context, index) => const Divider(color: Colors.white10, height: 1),
                 itemBuilder: (context, index) {
                   final act = activities[index];
                   final isCreation = act['type'] == 'created';
-                  final timeAgo = _getTimeAgo(act['created_at'] as DateTime);
+                  final sName = act['sport_name']?.toString() ?? '';
+                  final String descText = (sName.toLowerCase() == 'etkinlik' || sName.isEmpty)
+                      ? (isCreation ? 'Bir etkinlik oluşturdu' : 'Bir etkinliğe katıldı')
+                      : (isCreation ? '$sName etkinliği oluşturdu' : '$sName etkinliğine katıldı');
                   
-                  return ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    leading: AvatarWidget(
-                      name: act['full_name'] ?? 'U',
-                      avatarUrl: act['avatar_url'],
-                      radius: 20,
-                    ),
-                    title: RichText(
-                      text: TextSpan(
-                        style: const TextStyle(fontSize: 13, color: Colors.white),
+                  return GestureDetector(
+                    onTap: () {
+                      if (act['event_data'] != null) {
+                        context.push('/event-detail', extra: act['event_data']);
+                      }
+                    },
+                    child: Container(
+                      margin: const EdgeInsets.only(right: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1A1A1A),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.white10),
+                      ),
+                      child: Row(
                         children: [
-                          TextSpan(text: act['full_name'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                          TextSpan(text: isCreation ? ' yeni bir ' : ' şu maça katıldı: ', style: const TextStyle(color: Colors.white70)),
-                          TextSpan(text: '${act['sport_name']} ', style: const TextStyle(color: MatchFitTheme.accentGreen, fontWeight: FontWeight.w600)),
-                          if (isCreation) const TextSpan(text: 'maçı kurdu.', style: TextStyle(color: Colors.white70)),
+                          AvatarWidget(
+                            name: act['full_name'] ?? 'U',
+                            avatarUrl: act['avatar_url'],
+                            radius: 24,
+                          ),
+                          const SizedBox(width: 12),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                act['full_name'] ?? 'Bilinmeyen',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                descText,
+                                style: const TextStyle(fontSize: 12, color: Colors.white70),
+                              ),
+                            ],
+                          ),
                         ],
                       ),
-                    ),
-                    subtitle: Text(
-                      timeAgo,
-                      style: const TextStyle(color: Colors.white38, fontSize: 11),
-                    ),
-                    trailing: Icon(
-                      isCreation ? Icons.add_circle_outline : _getSportIcon(act['sport_name'] as String),
-                      color: isCreation ? Colors.blue : MatchFitTheme.accentGreen,
-                      size: 20,
                     ),
                   );
                 },
@@ -745,65 +868,221 @@ class HomeScreen extends ConsumerWidget {
           ],
         );
       },
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const SizedBox.shrink(),
       error: (_, __) => const SizedBox.shrink(),
     );
   }
 
-  IconData _getSportIcon(String sportName) {
-    final lower = sportName.toLowerCase();
-    if (lower.contains('tenis') || lower.contains('padel')) return Icons.sports_tennis;
-    if (lower.contains('basketbol')) return Icons.sports_basketball;
-    if (lower.contains('futbol') || lower.contains('saha')) return Icons.sports_soccer;
-    if (lower.contains('voleybol')) return Icons.sports_volleyball;
-    if (lower.contains('koşu') || lower.contains('run') || lower.contains('sprint')) return Icons.directions_run;
-    if (lower.contains('bisiklet') || lower.contains('mtb')) return Icons.directions_bike;
-    if (lower.contains('ağırlık') || lower.contains('training') || lower.contains('cross')) return Icons.fitness_center;
-    if (lower.contains('yürüyüş') || lower.contains('trekking')) return Icons.hiking;
-    if (lower.contains('yüzme') || lower.contains('kürek') || lower.contains('sörf') || lower.contains('paddle') || lower.contains('sup')) return Icons.pool;
-    if (lower.contains('boks') || lower.contains('mma') || lower.contains('jitsu')) return Icons.sports_mma;
-    if (lower.contains('yoga') || lower.contains('pilates') || lower.contains('meditasyon')) return Icons.self_improvement;
-    if (lower.contains('kayak') || lower.contains('snowboard')) return Icons.snowboarding;
-    if (lower.contains('tırmanış') || lower.contains('boulder')) return Icons.terrain;
-    if (lower.contains('motor') || lower.contains('atv') || lower.contains('enduro')) return Icons.motorcycle;
-    return Icons.sports_kabaddi;
+  Widget _buildRecommendedEventsList(BuildContext context, WidgetRef ref) {
+    final recommendedAsync = ref.watch(recommendedEventsProvider);
+
+    return recommendedAsync.when(
+      data: (events) {
+        if (events.length <= 1) return const SizedBox.shrink(); // Zaten Hero'da gösterildi.
+        final listEvents = events.skip(1).take(5).toList(); // Sonraki 5 etkinliği al
+        
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: listEvents.map((e) {
+              final title = e['title'] as String? ?? 'Etkinlik';
+              final sport = e['sports']?['name'] as String? ?? 'Spor';
+              final distMeters = (e['distance'] as num?)?.toDouble() ?? 0.0;
+              final distance = distMeters > 0 ? '${(distMeters / 1000).toStringAsFixed(1)} km' : '? km';
+              
+              String time = '?';
+              if (e['start_time'] != null) {
+                final st = e['start_time'].toString();
+                time = st.length >= 5 ? (st.contains('T') ? st.split('T')[1].substring(0, 5) : st.substring(0, 5)) : st;
+              }
+              final participants = int.tryParse(e['participant_count']?.toString() ?? '') ?? 1;
+              final maxP = int.tryParse(e['max_participants']?.toString() ?? '') ?? 10;
+              final fillRate = participants / maxP;
+
+              return Container(
+                width: 220,
+                margin: const EdgeInsets.only(right: 16),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E1E1E),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(_getSportEmoji(sport), style: const TextStyle(fontSize: 20)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            title,
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        const Icon(Icons.location_on, color: Colors.white54, size: 12),
+                        const SizedBox(width: 4),
+                        Text(distance, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                        const Spacer(),
+                        const Icon(Icons.access_time, color: Colors.white54, size: 12),
+                        const SizedBox(width: 4),
+                        Text(time, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: LinearProgressIndicator(
+                              value: fillRate,
+                              backgroundColor: Colors.white10,
+                              valueColor: const AlwaysStoppedAnimation<Color>(MatchFitTheme.accentGreen),
+                              minHeight: 4,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text('$participants/$maxP', style: const TextStyle(color: Colors.white54, fontSize: 10)),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () => context.push('/event-detail', extra: e),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white10,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          elevation: 0,
+                        ),
+                        child: const Text('İncele', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        );
+      },
+      loading: () => const SizedBox(height: 120, child: Center(child: CircularProgressIndicator())),
+      error: (_, __) => const SizedBox.shrink(),
+    );
   }
 
-  String _getTimeAgo(DateTime dateTime) {
-    final diff = DateTime.now().difference(dateTime);
-    if (diff.inMinutes < 60) {
-      return '${diff.inMinutes} dakika önce';
-    } else if (diff.inHours < 24) {
-      return '${diff.inHours} saat önce';
-    } else {
-      return '${diff.inDays} gün önce';
-    }
-  }
-
-  Widget _buildRecommendedEvents(BuildContext context) {
+  Widget _buildOpportunities(BuildContext context) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
-          _buildEventCard(
-            title: 'Akşam Tenis Maçı',
-            emoji: '🎾',
-            verified: true,
-            distance: '1.5 km',
-            time: '19:30',
-            capacity: '3/4 kişi',
-            imageColor: Colors.green.shade900,
+          Container(
+            width: 260,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF1E2A1E), Color(0xFF121A12)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: MatchFitTheme.accentGreen.withOpacity(0.2)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.monetization_on, color: MatchFitTheme.accentGreen, size: 18),
+                    const SizedBox(width: 8),
+                    const Text('Haftalık Görev', style: TextStyle(color: MatchFitTheme.accentGreen, fontWeight: FontWeight.bold, fontSize: 12)),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                const Text('3 Etkinliğe Katıl', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                const SizedBox(height: 4),
+                const Text('Görev bitimine 2 gün kaldı', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('+50 MF Kazan', style: TextStyle(color: MatchFitTheme.accentGreen, fontWeight: FontWeight.bold, fontSize: 14)),
+                    ElevatedButton(
+                      onPressed: () {},
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: MatchFitTheme.accentGreen.withOpacity(0.2),
+                        foregroundColor: MatchFitTheme.accentGreen,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        minimumSize: Size.zero,
+                        elevation: 0,
+                      ),
+                      child: const Text('Katıl', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                )
+              ],
+            ),
           ),
           const SizedBox(width: 16),
-          _buildEventCard(
-            title: 'Sabah Koşusu',
-            emoji: '🏃',
-            verified: false,
-            distance: '3.0 km',
-            time: '07:00',
-            capacity: '5/10 kişi',
-            imageColor: Colors.blue.shade900,
+          Container(
+            width: 260,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF1A1F35), Color(0xFF0F1220)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.blue.withOpacity(0.2)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.card_giftcard, color: Colors.blue, size: 18),
+                    const SizedBox(width: 8),
+                    const Text('Partner Fırsatı', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 12)),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                const Text('Decathlon %15 İndirim', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                const SizedBox(height: 4),
+                const Text('300 MF Puan ile aç', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    ElevatedButton(
+                      onPressed: () {},
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue.withOpacity(0.2),
+                        foregroundColor: Colors.blue,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        minimumSize: Size.zero,
+                        elevation: 0,
+                      ),
+                      child: const Text('İncele', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                )
+              ],
+            ),
           ),
         ],
       ),
@@ -973,55 +1252,52 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
+  Widget _buildFilterChip(String label, bool isSelected, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? MatchFitTheme.accentGreen : Colors.white.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: isSelected ? MatchFitTheme.accentGreen : Colors.white10),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.black : Colors.white,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            fontSize: 13,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildNearbyEventsSection(BuildContext context, WidgetRef ref) {
     final locationNameAsync = ref.watch(locationNameProvider);
     final eventsAsync = ref.watch(eventsProvider);
+    final selectedFilter = ref.watch(homeFilterProvider);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Yakınındaki Etkinlikler',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 20,
-                ),
-              ),
-              locationNameAsync.when(
-                data: (loc) => Row(
-                  children: [
-                    const Icon(
-                      Icons.location_on,
-                      size: 14,
-                      color: Colors.white54,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      loc,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w500,
-                        fontSize: 14,
-                        color: Colors.white54,
-                      ),
-                    ),
-                  ],
-                ),
-                loading: () => const SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-                error: (_, __) => const SizedBox(),
-              ),
+              _buildFilterChip('Yakınımda', selectedFilter == 'Yakınımda', () => ref.read(homeFilterProvider.notifier).setFilter('Yakınımda')),
+              const SizedBox(width: 8),
+              _buildFilterChip('Bugün', selectedFilter == 'Bugün', () => ref.read(homeFilterProvider.notifier).setFilter('Bugün')),
+              const SizedBox(width: 8),
+              _buildFilterChip('Arkadaşlarım', selectedFilter == 'Arkadaşlarım', () => ref.read(homeFilterProvider.notifier).setFilter('Arkadaşlarım')),
+              const SizedBox(width: 8),
+              _buildFilterChip('Başlangıç', selectedFilter == 'Başlangıç', () => ref.read(homeFilterProvider.notifier).setFilter('Başlangıç')),
             ],
           ),
         ),
+        const SizedBox(height: 8),
         eventsAsync.when(
           data: (events) {
             if (events.isEmpty) {
@@ -1162,9 +1438,54 @@ class HomeScreen extends ConsumerWidget {
               );
             }
 
-            // Sort by distance and limit to 5 events
-            final sortedEvents = List<Map<String, dynamic>>.from(events);
-            sortedEvents.sort((a, b) {
+            // Filter the events locally
+            List<Map<String, dynamic>> filteredEvents = List<Map<String, dynamic>>.from(events);
+            final now = DateTime.now();
+            final todayStr = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+
+            if (selectedFilter == 'Bugün') {
+              filteredEvents = filteredEvents.where((e) {
+                return e['event_date']?.toString() == todayStr;
+              }).toList();
+            } else if (selectedFilter == 'Yakınımda') {
+              filteredEvents = filteredEvents.where((e) {
+                final distMeters = (e['distance'] as num?)?.toDouble() ?? 0.0;
+                return distMeters <= 10000; // 10 km
+              }).toList();
+            } else if (selectedFilter == 'Arkadaşlarım') {
+              final friendsAsync = ref.watch(friendsWithUpcomingEventsProvider);
+              final friendIds = friendsAsync.value?.map((f) => f['id']).toSet() ?? {};
+              filteredEvents = filteredEvents.where((e) {
+                return friendIds.contains(e['host_id']);
+              }).toList();
+            } else if (selectedFilter == 'Başlangıç') {
+              filteredEvents = filteredEvents.where((e) {
+                final title = (e['title']?.toString() ?? '').toLowerCase();
+                final desc = (e['description']?.toString() ?? '').toLowerCase();
+                return title.contains('başlangıç') || title.contains('yeni') || desc.contains('başlangıç');
+              }).toList();
+            }
+
+            if (filteredEvents.isEmpty) {
+              return Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Center(
+                  child: Column(
+                    children: [
+                      const Icon(Icons.search_off, color: Colors.white54, size: 48),
+                      const SizedBox(height: 16),
+                      Text(
+                        '"$selectedFilter" için uygun etkinlik bulunamadı.',
+                        style: const TextStyle(color: Colors.white70, fontSize: 14),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+
+            // Sort by distance
+            filteredEvents.sort((a, b) {
               final dA = (a['distance'] as num?)?.toDouble() ?? 999999.0;
               final dB = (b['distance'] as num?)?.toDouble() ?? 999999.0;
               return dA.compareTo(dB);
@@ -1184,7 +1505,7 @@ class HomeScreen extends ConsumerWidget {
                 ],
               ),
               child: Column(
-                children: sortedEvents.take(5).map((e) {
+                children: filteredEvents.take(5).map((e) {
                   final title = e['title'] as String? ?? 'Etkinlik';
                   final sport = e['sports']?['name'] as String? ?? 'Spor';
                   final distMeters = (e['distance'] as num?)?.toDouble() ?? 0.0;

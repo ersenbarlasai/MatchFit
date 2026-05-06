@@ -33,6 +33,14 @@ class EventRepository {
     await _supabase.from('events').delete().eq('id', eventId);
   }
 
+  Future<void> archiveEvent(String eventId) async {
+    await _supabase.from('events').update({'is_archived': true}).eq('id', eventId);
+  }
+
+  Future<void> unarchiveEvent(String eventId) async {
+    await _supabase.from('events').update({'is_archived': false}).eq('id', eventId);
+  }
+
   Future<Map<String, dynamic>?> getEventDetails(String eventId) async {
     final response = await _supabase
         .from('events')
@@ -77,11 +85,26 @@ class EventRepository {
             '*, sports(name, category), profiles(full_name, trust_score, avatar_url)',
           )
           .eq('status', 'open')
-          .order('event_date', ascending: true);
+          .eq('is_archived', false)
+          .order('event_date', ascending: true)
+          .order('start_time', ascending: true);
       rawEvents = List<Map<String, dynamic>>.from(response);
     }
 
-    return rawEvents.where(EventTimeUtils.isUpcoming).toList();
+    final filtered = rawEvents.where(EventTimeUtils.isUpcoming).toList();
+    
+    // Sort by date and time ascending (soonest first)
+    filtered.sort((a, b) {
+      try {
+        final dateTimeA = DateTime.parse('${a['event_date']} ${a['start_time']}');
+        final dateTimeB = DateTime.parse('${b['event_date']} ${b['start_time']}');
+        return dateTimeA.compareTo(dateTimeB);
+      } catch (e) {
+        return 0;
+      }
+    });
+
+    return filtered;
   }
 
   Future<List<String>> _getBlockedIds() async {

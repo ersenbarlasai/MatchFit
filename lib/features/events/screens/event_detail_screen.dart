@@ -603,6 +603,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                         ),
                         const SizedBox(height: 12),
                         _HostCard(
+                          hostId: hostId,
                           hostName: hostName,
                           avatarUrl: hostAvatar,
                           trustScore: hostTrust,
@@ -915,10 +916,12 @@ class _LocationCard extends StatelessWidget {
 // ── Host Card ─────────────────────────────────────────────────────
 
 class _HostCard extends StatelessWidget {
+  final String hostId;
   final String hostName;
   final String? avatarUrl;
   final int trustScore;
   const _HostCard({
+    required this.hostId,
     required this.hostName,
     this.avatarUrl,
     required this.trustScore,
@@ -936,61 +939,69 @@ class _HostCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              AvatarWidget(
-                name: hostName,
-                radius: 22,
-                avatarUrl: avatarUrl,
-                editable: false,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  hostName,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
-                  ),
+          GestureDetector(
+            onTap: () {
+              context.push(
+                '/user-profile',
+                extra: hostId,
+              );
+            },
+            child: Row(
+              children: [
+                AvatarWidget(
+                  name: hostName,
+                  radius: 22,
+                  avatarUrl: avatarUrl,
+                  editable: false,
                 ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  color: MatchFitTheme.accentGreen.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: MatchFitTheme.accentGreen.withOpacity(0.4),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.shield_outlined,
-                      size: 12,
-                      color: MatchFitTheme.accentGreen,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    hostName,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
                     ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '$trustScore Güven Puanı',
-                      style: const TextStyle(
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: MatchFitTheme.accentGreen.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: MatchFitTheme.accentGreen.withOpacity(0.4),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.shield_outlined,
+                        size: 12,
                         color: MatchFitTheme.accentGreen,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 11,
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 4),
+                      Text(
+                        '$trustScore Güven Puanı',
+                        style: const TextStyle(
+                          color: MatchFitTheme.accentGreen,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           const SizedBox(height: 12),
           Text(
-            'Yüksek güven puanına sahip onaylı organizatör.',
+            _getTrustDescription(trustScore),
             style: TextStyle(
               color: Colors.white.withOpacity(0.5),
               fontSize: 13,
@@ -1000,6 +1011,13 @@ class _HostCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _getTrustDescription(int score) {
+    if (score >= 80) return 'Yüksek güven puanına sahip onaylı organizatör.';
+    if (score >= 50) return 'Standart güven düzeyine sahip organizatör.';
+    if (score > 0) return 'Düşük güven puanına sahip organizatör. Lütfen dikkatli olunuz.';
+    return 'Henüz güven puanı oluşmamış yeni organizatör.';
   }
 }
 
@@ -1283,18 +1301,25 @@ class _RosterSection extends StatelessWidget {
             final profile = e.value['profiles'] as Map<String, dynamic>?;
             final name = profile?['full_name'] as String? ?? 'Oyuncu';
             final avatarUrl = profile?['avatar_url'] as String?;
+            final userId = e.value['user_id'] as String?;
             final pos = _positions[e.key % _positions.length];
-            return Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1A1A1A),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.white.withOpacity(0.06)),
-              ),
-              child: Row(
-                children: [
-                  AvatarWidget(
+            return GestureDetector(
+              onTap: () {
+                if (userId != null) {
+                  context.push('/user-profile', extra: userId);
+                }
+              },
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1A1A1A),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.white.withOpacity(0.06)),
+                ),
+                child: Row(
+                  children: [
+                    AvatarWidget(
                     name: name,
                     radius: 18,
                     avatarUrl: avatarUrl,
@@ -1331,8 +1356,9 @@ class _RosterSection extends StatelessWidget {
                   ),
                 ],
               ),
-            );
-          }),
+            ),
+          );
+        }),
       ],
     );
   }
