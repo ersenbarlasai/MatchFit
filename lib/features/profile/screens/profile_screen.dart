@@ -13,6 +13,7 @@ import '../../events/repositories/event_repository.dart';
 import '../../xp_engine/providers/xp_engine_provider.dart';
 import '../../economy_engine/providers/economy_engine_provider.dart';
 import '../../coach_engine/providers/coach_provider.dart';
+import 'gamification_info_screen.dart';
 
 // ── Providers ──────────────────────────────────────────────────────
 
@@ -172,7 +173,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 6, vsync: this);
   }
 
   @override
@@ -896,6 +897,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   tabs: const [
                     Tab(text: 'XP & Puan'),
                     Tab(text: 'Güven & Rozetler'),
+                    Tab(text: 'MatchFit Evreni'),
                     Tab(text: 'İlgi Alanları'),
                     Tab(text: 'Arkadaşlar'),
                     Tab(text: 'Paylaşımlarım'),
@@ -912,6 +914,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
         children: [
           _XPTab(userId: widget.userId),
           _TrustBadgesTab(userId: widget.userId),
+          const GamificationRulesContent(),
           _InterestsTab(userId: widget.userId, isMe: isMe),
           _FriendsTab(userId: widget.userId),
           _PostsGrid(userId: widget.userId),
@@ -2711,26 +2714,26 @@ class _XPTab extends ConsumerWidget {
               const _XPRuleItem(
                 icon: Icons.add_circle_outline,
                 title: 'Etkinlik Oluşturma',
-                description: 'Yeni bir etkinlik oluşturduğunda anında +50 XP kazanırsın.',
-                points: '+50 XP',
-              ),
-              const _XPRuleItem(
-                icon: Icons.login_rounded,
-                title: 'Günlük Giriş',
-                description: 'Uygulamayı her gün açtığında günlük serini korur ve +10 XP kazanırsın.',
-                points: '+10 XP',
+                description: 'Yeni bir etkinlik oluşturup tamamladığında (Host) temel etkinlik puanını kazanırsın.',
+                points: '~45 XP',
               ),
               const _XPRuleItem(
                 icon: Icons.check_circle_outline,
                 title: 'Etkinliğe Katılım',
-                description: 'Sahaya çıkıp etkinliklere katıldığında ve başarılı check-in yaptığında ekstra XP kazanırsın.',
-                points: '+25 XP',
+                description: 'Sahaya çıkıp etkinliklere katıldığında ve başarılı check-in yaptığında kazanırsın.',
+                points: '~40 XP',
               ),
               const _XPRuleItem(
-                icon: Icons.people_alt_outlined,
-                title: 'Sosyal Etkileşim',
-                description: 'Yeni arkadaşlıklar kurup profilini tamamlarsan başlangıç bonusları seni bekler.',
-                points: '+15 XP',
+                icon: Icons.login_rounded,
+                title: 'Günlük Giriş',
+                description: 'Uygulamayı her gün açtığında günlük serini (streak) korur ve anında XP kazanırsın.',
+                points: '+10 XP',
+              ),
+              const _XPRuleItem(
+                icon: Icons.auto_graph,
+                title: 'XP Çarpanları',
+                description: "Düzenli katılım (Streak) ve kaliteli etkinliklerde (S-Tier) %40'a varan XP çarpanı devreye girer.",
+                points: 'Çarpan',
               ),
               const Text(
                 'MF Points (Ödül Puanı) Nasıl Kazanılır?',
@@ -2744,15 +2747,21 @@ class _XPTab extends ConsumerWidget {
               
               const _XPRuleItem(
                 icon: Icons.event_available,
-                title: 'Etkinlik Oluşturma',
-                description: 'Yeni bir etkinlik oluşturduğunda XP ile birlikte +25 MF Puan kazanırsın.',
-                points: '+25 MF',
+                title: 'Etkinlik Tamamlama',
+                description: 'Etkinliği oluşturup veya katılıp check-in aşamalarını tamamladığında MF Puan kazanırsın.',
+                points: '+10 MF',
               ),
               const _XPRuleItem(
                 icon: Icons.card_giftcard,
                 title: 'Günlük Giriş Ödülü',
-                description: 'Uygulamaya her gün düzenli girerek XP ve MF Puanları topla.',
+                description: 'Uygulamaya her gün düzenli girerek günlük giriş bonusundan MF Puanları topla.',
                 points: '+5 MF',
+              ),
+              const _XPRuleItem(
+                icon: Icons.shield_moon_outlined,
+                title: 'Ekonomi Koruması',
+                description: 'Günlük MF sınırına yaklaştığında enflasyon koruması (Economy Factor) devreye girerek oranları dengeler.',
+                points: 'Limit',
               ),
               const _XPRuleItem(
                 icon: Icons.shopping_cart_checkout,
@@ -2760,6 +2769,7 @@ class _XPTab extends ConsumerWidget {
                 description: 'Topladığın MF Puanlarını ödül mağazasında indirim kodları ve fırsatlar için kullanabilirsin.',
                 points: 'Mağaza',
               ),
+              const SizedBox(height: 40),
             ],
           ),
         );

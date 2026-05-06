@@ -22,6 +22,7 @@ import '../features/profile/screens/connections_screen.dart';
 import '../features/events/screens/user_events_screen.dart';
 import '../features/ranking_engine/screens/leaderboard_screen.dart';
 import '../features/coach_engine/screens/become_coach_screen.dart';
+import '../features/profile/screens/gamification_info_screen.dart';
 import '../features/explore/screens/user_search_screen.dart';
 import '../features/coach_engine/screens/coach_onboarding_info_screen.dart';
 import '../features/coach_engine/screens/coach_management_screen.dart';
@@ -77,6 +78,12 @@ final GoRouter appRouter = GoRouter(
         GoRoute(
           path: '/profile',
           builder: (context, state) => const ProfileScreen(),
+          routes: [
+            GoRoute(
+              path: 'gamification-info',
+              builder: (context, state) => const GamificationInfoScreen(),
+            ),
+          ],
         ),
         GoRoute(
           path: '/leaderboard',
