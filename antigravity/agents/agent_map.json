@@ -1,0 +1,118 @@
+{
+  "project": "MatchFit",
+  "version": "2026-05-agent-architecture",
+  "canonicalRegistry": "docs/agents/CANONICAL_AGENT_ARCHITECTURE.md",
+  "rules": [
+    "AGENTS.md",
+    "GEMINI.md",
+    ".agent/rules/matchfit-workspace.md"
+  ],
+  "agents": [
+    {
+      "id": "matchmaker",
+      "handle": "@Matchmaker",
+      "layer": "core",
+      "status": "implemented-partial",
+      "authority": "event_and_user_recommendation"
+    },
+    {
+      "id": "guardian",
+      "handle": "@Guardian",
+      "layer": "core",
+      "status": "implemented-partial",
+      "authority": "real_time_security_and_privacy_signals"
+    },
+    {
+      "id": "referee",
+      "handle": "@Referee",
+      "layer": "core",
+      "status": "implemented-partial",
+      "authority": "trust_score_writer"
+    },
+    {
+      "id": "content_manager",
+      "handle": "@ContentManager",
+      "layer": "core",
+      "status": "implemented-partial",
+      "authority": "post_event_content_and_tag_consent"
+    },
+    {
+      "id": "notification",
+      "handle": "@Notification",
+      "layer": "core",
+      "status": "created-from-gap",
+      "authority": "central_notification_delivery"
+    },
+    {
+      "id": "xp_engine",
+      "handle": "@XPEngine",
+      "layer": "calculation",
+      "status": "documented-needs-implementation",
+      "authority": "xp_level_streak_calculation"
+    },
+    {
+      "id": "ranking_engine",
+      "handle": "@RankingEngine",
+      "layer": "calculation",
+      "status": "documented-needs-implementation",
+      "authority": "leaderboard_and_league_snapshots"
+    },
+    {
+      "id": "fraud_detection",
+      "handle": "@FraudDetection",
+      "layer": "calculation",
+      "status": "documented-needs-implementation",
+      "authority": "async_abuse_risk_scoring"
+    },
+    {
+      "id": "economy_engine",
+      "handle": "@EconomyEngine",
+      "layer": "economy",
+      "status": "documented-needs-implementation",
+      "authority": "mf_points_ledger_limits_eligibility"
+    },
+    {
+      "id": "reward_personalization",
+      "handle": "@RewardPersonalization",
+      "layer": "economy",
+      "status": "documented-needs-implementation",
+      "authority": "personalized_reward_ranking"
+    },
+    {
+      "id": "partner_catalog",
+      "handle": "@PartnerCatalog",
+      "layer": "economy",
+      "status": "created-from-gap",
+      "authority": "sponsor_catalog_inventory_campaigns"
+    },
+    {
+      "id": "context_agent",
+      "handle": "@ContextAgent",
+      "layer": "context",
+      "status": "created-from-gap",
+      "authority": "weather_city_timezone_context"
+    },
+    {
+      "id": "analytics_agent",
+      "handle": "@AnalyticsAgent",
+      "layer": "analytics",
+      "status": "created-from-gap",
+      "authority": "agent_health_and_reporting_events"
+    },
+    {
+      "id": "release_commander",
+      "handle": "@MatchFitReleaseCommander",
+      "layer": "devops",
+      "status": "documented",
+      "authority": "release_report_and_versioning"
+    }
+  ],
+  "criticalDecisions": {
+    "trustScoreWriter": "@Referee",
+    "realTimeSecurity": "@Guardian",
+    "asyncFraudAnalysis": "@FraudDetection",
+    "notificationDelivery": "@Notification",
+    "rewardCatalogSource": "@PartnerCatalog",
+    "rewardRecommendationOwner": "@RewardPersonalization"
+  }
+}

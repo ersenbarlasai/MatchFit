@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:matchfit/core/theme.dart';
+import '../../xp_engine/repositories/xp_engine_repository.dart';
+import '../../economy_engine/repositories/economy_engine_repository.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -46,6 +48,9 @@ class _SplashScreenState extends State<SplashScreen> {
 
     final session = Supabase.instance.client.auth.currentSession;
     if (session != null) {
+      // Günlük giriş veya uygulama açılışı için XP ve MF Points (SQL arka planda sınırlandırabilir)
+      XPEngineRepository().addUserXP(10, 'app_open');
+      EconomyEngineRepository().addMFPoints(5, 'app_open', description: 'Günlük Giriş Ödülü');
       context.go('/home');
     } else {
       context.go('/login');

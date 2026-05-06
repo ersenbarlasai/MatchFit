@@ -1,0 +1,11 @@
+Önce şu dosyayı oku:
+docs/agents/CANONICAL_AGENT_ARCHITECTURE.md
+
+Sonra:
+1. Bu görevin owner agent'ını söyle.
+2. Hangi dosyalara dokunacağını özetle.
+3. Agent yetki sınırlarını bozmadan kodla.
+4. Sonunda ne değiştirdiğini ve hangi agent akışına bağladığını raporla.
+
+Görev:
+[İstediğim değişiklik]

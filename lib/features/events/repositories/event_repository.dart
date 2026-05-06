@@ -2,6 +2,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
 import '../utils/event_time_utils.dart';
+import '../../xp_engine/repositories/xp_engine_repository.dart';
+import '../../economy_engine/repositories/economy_engine_repository.dart';
 
 final eventRepositoryProvider = Provider((ref) => EventRepository());
 
@@ -20,6 +22,10 @@ class EventRepository {
 
   Future<void> createEvent(Map<String, dynamic> eventData) async {
     await _supabase.from('events').insert(eventData);
+    
+    // Etkinlik oluşturduğunda 20 Base XP ve 25 MF Points kazanır
+    await XPEngineRepository().addUserXP(20, 'event_creation');
+    await EconomyEngineRepository().addMFPoints(25, 'event_creation', description: 'Yeni Etkinlik Oluşturma');
   }
 
   Future<void> updateEvent(

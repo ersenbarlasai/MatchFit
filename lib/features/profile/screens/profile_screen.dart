@@ -10,6 +10,9 @@ import '../models/trust_system.dart';
 import 'package:matchfit/core/providers/profile_provider.dart';
 import 'package:matchfit/core/l10n/app_localizations.dart';
 import '../../events/repositories/event_repository.dart';
+import '../../xp_engine/providers/xp_engine_provider.dart';
+import '../../economy_engine/providers/economy_engine_provider.dart';
+import '../../coach_engine/providers/coach_provider.dart';
 
 // ── Providers ──────────────────────────────────────────────────────
 
@@ -169,7 +172,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
   }
 
   @override
@@ -381,9 +384,54 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           ),
           actions: [
             if (isMe)
-              IconButton(
-                icon: const Icon(Icons.settings_outlined, color: Colors.white),
-                onPressed: () => context.push('/privacy-settings'),
+              Consumer(
+                builder: (context, ref, child) {
+                  final coachProfileAsync = ref.watch(currentCoachProfileProvider(userId));
+                  
+                  return Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      coachProfileAsync.when(
+                        data: (coachData) {
+                          final level = coachData?['verification_level'] ?? 'none';
+                          
+                          if (level == 'none') {
+                            return IconButton(
+                              icon: const Icon(Icons.sports_outlined, color: Colors.amber),
+                              tooltip: 'Koç Ol',
+                              onPressed: () => context.push('/coach-info'),
+                            );
+                          } else if (level == 'pending') {
+                            return IconButton(
+                              icon: const Icon(Icons.hourglass_empty, color: Colors.white38),
+                              tooltip: 'Başvurunuz İncelemede',
+                              onPressed: () {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Başvurunuz inceleme aşamasındadır.')),
+                                );
+                              },
+                            );
+                          } else {
+                            // Already a verified coach
+                            return IconButton(
+                              icon: const Icon(Icons.verified, color: MatchFitTheme.accentGreen),
+                              tooltip: 'Koç Paneli',
+                              onPressed: () {
+                                // TODO: Navigate to Coach Dashboard
+                              },
+                            );
+                          }
+                        },
+                        loading: () => const SizedBox(width: 48, child: Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)))),
+                        error: (_, __) => const SizedBox(),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.settings_outlined, color: Colors.white),
+                        onPressed: () => context.push('/privacy-settings'),
+                      ),
+                    ],
+                  );
+                },
               )
             else
               Builder(
@@ -785,11 +833,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   indicatorColor: MatchFitTheme.accentGreen,
                   indicatorWeight: 2.5,
                   indicatorSize: TabBarIndicatorSize.label,
+                  isScrollable: true,
+                  tabAlignment: TabAlignment.start,
                   labelStyle: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 13,
                   ),
                   tabs: const [
+                    Tab(text: 'XP & Puan'),
                     Tab(text: 'Güven & Rozetler'),
                     Tab(text: 'İlgi Alanları'),
                     Tab(text: 'Arkadaşlar'),
@@ -805,6 +856,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       body: TabBarView(
         controller: _tabController,
         children: [
+          _XPTab(userId: widget.userId),
           _TrustBadgesTab(userId: widget.userId),
           _InterestsTab(userId: widget.userId, isMe: isMe),
           _FriendsTab(userId: widget.userId),
@@ -2530,6 +2582,235 @@ class _InterestsTabState extends ConsumerState<_InterestsTab> {
                 },
               ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+// ── XP Tab ────────────────────────────────────────────────────────
+
+class _XPTab extends ConsumerWidget {
+  final String? userId;
+  const _XPTab({this.userId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final targetId = userId ?? ref.read(authRepositoryProvider).currentUser?.id;
+    if (targetId == null) return const SizedBox.shrink();
+
+    final xpAsync = ref.watch(userXPProfileProvider(targetId));
+    final mfAsync = ref.watch(userMFBalanceProvider(targetId));
+
+    if (xpAsync.isLoading || mfAsync.isLoading) {
+      return const Center(child: CircularProgressIndicator(color: MatchFitTheme.accentGreen));
+    }
+    
+    if (xpAsync.hasError || mfAsync.hasError) {
+      return Center(child: Text('Error loading data', style: const TextStyle(color: Colors.white24)));
+    }
+
+    final xpData = xpAsync.value;
+    final mfData = mfAsync.value;
+    
+    final xpAmount = xpData?['xp_amount'] ?? 0;
+    final currentLevel = xpData?['current_level'] ?? 1;
+    final currentStreak = xpData?['current_streak'] ?? 0;
+    final mfPoints = mfData?['balance'] ?? 0;
+
+    return SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // XP Info Card
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E1E1E),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: MatchFitTheme.accentGreen.withOpacity(0.3)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _XPStatItem(icon: Icons.star_rounded, label: 'XP', value: xpAmount.toString(), color: Colors.amber),
+                    _XPStatItem(icon: Icons.military_tech_rounded, label: 'Seviye', value: currentLevel.toString(), color: MatchFitTheme.accentGreen),
+                    _XPStatItem(icon: Icons.local_fire_department_rounded, label: 'Seri', value: '$currentStreak Gün', color: Colors.orange),
+                    _XPStatItem(icon: Icons.monetization_on_rounded, label: 'MF Puan', value: mfPoints.toString(), color: Colors.cyan),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 32),
+              
+              // Rules Section
+              const Text(
+                'Nasıl Daha Fazla XP Kazanılır?',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 18,
+                ),
+              ),
+              const SizedBox(height: 16),
+              
+              const _XPRuleItem(
+                icon: Icons.add_circle_outline,
+                title: 'Etkinlik Oluşturma',
+                description: 'Yeni bir etkinlik oluşturduğunda anında +50 XP kazanırsın.',
+                points: '+50 XP',
+              ),
+              const _XPRuleItem(
+                icon: Icons.login_rounded,
+                title: 'Günlük Giriş',
+                description: 'Uygulamayı her gün açtığında günlük serini korur ve +10 XP kazanırsın.',
+                points: '+10 XP',
+              ),
+              const _XPRuleItem(
+                icon: Icons.check_circle_outline,
+                title: 'Etkinliğe Katılım',
+                description: 'Sahaya çıkıp maçlara katıldığında ve başarılı check-in yaptığında ekstra XP kazanırsın.',
+                points: '+25 XP',
+              ),
+              const _XPRuleItem(
+                icon: Icons.people_alt_outlined,
+                title: 'Sosyal Etkileşim',
+                description: 'Yeni arkadaşlıklar kurup profilini tamamlarsan başlangıç bonusları seni bekler.',
+                points: '+15 XP',
+              ),
+              const Text(
+                'MF Points (Ödül Puanı) Nasıl Kazanılır?',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 18,
+                ),
+              ),
+              const SizedBox(height: 16),
+              
+              const _XPRuleItem(
+                icon: Icons.event_available,
+                title: 'Etkinlik Oluşturma',
+                description: 'Yeni bir etkinlik oluşturduğunda XP ile birlikte +25 MF Puan kazanırsın.',
+                points: '+25 MF',
+              ),
+              const _XPRuleItem(
+                icon: Icons.card_giftcard,
+                title: 'Günlük Giriş Ödülü',
+                description: 'Uygulamaya her gün düzenli girerek XP ve MF Puanları topla.',
+                points: '+5 MF',
+              ),
+              const _XPRuleItem(
+                icon: Icons.shopping_cart_checkout,
+                title: 'Puanları Harcama',
+                description: 'Topladığın MF Puanlarını ödül mağazasında indirim kodları ve fırsatlar için kullanabilirsin.',
+                points: 'Mağaza',
+              ),
+            ],
+          ),
+        );
+  }
+}
+
+class _XPStatItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+  
+  const _XPStatItem({required this.icon, required this.label, required this.value, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Icon(icon, color: color, size: 32),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: TextStyle(color: color, fontSize: 24, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: const TextStyle(color: Colors.white54, fontSize: 12),
+        ),
+      ],
+    );
+  }
+}
+
+class _XPRuleItem extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String description;
+  final String points;
+
+  const _XPRuleItem({
+    required this.icon,
+    required this.title,
+    required this.description,
+    required this.points,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF161616),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: MatchFitTheme.accentGreen.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: MatchFitTheme.accentGreen, size: 24),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
+                    Text(
+                      points,
+                      style: const TextStyle(
+                        color: MatchFitTheme.accentGreen,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  description,
+                  style: const TextStyle(
+                    color: Colors.white54,
+                    fontSize: 13,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );

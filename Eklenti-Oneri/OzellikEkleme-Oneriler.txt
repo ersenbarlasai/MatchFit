@@ -1,0 +1,61 @@
+🎯 “INSTANT MATCH” (ANLIK PARTNER BULMA)
+“Şu an basketbol oynayacak 2 kişi lazım”
+Sistem:
+anlık müsait kullanıcıları listeler
+“5 dk içinde sahadayım” filtresi
+👉 Uber mantığı (spor versiyonu)
+
+
+
+🔔 AKILLI PUSH NOTIFICATION
+Örnek:
+“Şu an yakınında 3 kişi basketbol arıyor”
+“Senin seviyende yeni maç açıldı”
+❗ spam değil → davranış bazlı
+
+
+
+📍 “NEARBY LIVE HEATMAP”
+Harita:
+şu an nerede etkinlik var
+nerede insanlar spor yapıyor
+👉 “şehir canlılık haritası”
+
+
+
+🎥 “MATCH HIGHLIGHTS”
+Etkinlik sonrası:
+otomatik özet
+skor
+katılım
+👉 Strava hissi
+
+
+
+💬 “SPORT CHAT + MICRO SOCIAL”
+Etkinlik içinde:
+mini chat
+emoji reaction
+hızlı durumlar (“geliyorum”, “5 dk”)
+
+
+🎁 “DAILY SPORT MISSIONS”
+
+Her gün:
+“2 km yürü”
+“1 maç oyna”
+“bir etkinliğe katıl”
+👉 görev → ödül
+
+
+
+🏆 RANKING + LEADERBOARD // yapıldı
+şehir bazlı
+spor bazlı
+👉 rekabet
+
+
+
+🧍 SOCIAL PRESSURE (GÜVENLİ)
+arkadaşlar ne yaptı
+kim maçta

@@ -14,6 +14,8 @@ import 'package:matchfit/core/services/location_service.dart';
 import 'package:geocoding/geocoding.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:matchfit/features/xp_engine/providers/xp_engine_provider.dart';
+import 'package:matchfit/features/economy_engine/providers/economy_engine_provider.dart';
 
 // ── Providers ──────────────────────────────────────────────────────
 
@@ -144,6 +146,103 @@ final friendsWithUpcomingEventsProvider =
         return [];
       }
     });
+
+// ── Social Pressure Provider ────────────────────────────────────────
+final socialPressureProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
+  ref.watch(eventChangeProvider); // Watch for global changes
+  final sb = Supabase.instance.client;
+  final myId = sb.auth.currentUser?.id;
+  if (myId == null) return [];
+
+  try {
+    // 1. Get friends
+    final relsRes = await sb
+        .from('user_relationships')
+        .select('sender_id, receiver_id, status')
+        .or('sender_id.eq.$myId,receiver_id.eq.$myId');
+
+    final friendIds = <String>{};
+    for (final rel in List<Map<String, dynamic>>.from(relsRes)) {
+      final status = rel['status'] as String?;
+      if (status == 'following' || status == 'accepted') {
+        final sender = rel['sender_id'] as String;
+        final receiver = rel['receiver_id'] as String;
+        if (sender != myId) friendIds.add(sender);
+        if (receiver != myId) friendIds.add(receiver);
+      }
+    }
+
+    if (friendIds.isEmpty) return [];
+
+    final todayStr = DateTime.now().toIso8601String().split('T')[0];
+
+    // 2. Get recent event participation of friends (only upcoming)
+    final recentParticipants = await sb
+        .from('event_participants')
+        .select('created_at, user_id, events!inner(title, event_date, status, sports(name)), profiles!event_participants_user_id_fkey(full_name, avatar_url)')
+        .inFilter('user_id', friendIds.toList())
+        .gte('events.event_date', todayStr)
+        .neq('events.status', 'cancelled')
+        .order('created_at', ascending: false)
+        .limit(10);
+
+    // 3. Get recently created events by friends (only upcoming)
+    final recentEvents = await sb
+        .from('events')
+        .select('created_at, host_id, title, event_date, status, sports(name), profiles!events_host_id_fkey(full_name, avatar_url)')
+        .inFilter('host_id', friendIds.toList())
+        .gte('event_date', todayStr)
+        .neq('status', 'cancelled')
+        .order('created_at', ascending: false)
+        .limit(10);
+
+    final activities = <Map<String, dynamic>>[];
+
+    // Parse participants
+    for (final p in List<Map<String, dynamic>>.from(recentParticipants)) {
+      final profile = p['profiles'] as Map<String, dynamic>?;
+      final event = p['events'] as Map<String, dynamic>?;
+      final sportName = event?['sports']?['name'] ?? 'Etkinlik';
+      if (profile != null && event != null) {
+        activities.add({
+          'type': 'joined',
+          'user_id': p['user_id'],
+          'full_name': profile['full_name'],
+          'avatar_url': profile['avatar_url'],
+          'event_title': event['title'] ?? '$sportName Maçı',
+          'sport_name': sportName,
+          'created_at': DateTime.parse(p['created_at']).toLocal(),
+        });
+      }
+    }
+
+    // Parse creations
+    for (final e in List<Map<String, dynamic>>.from(recentEvents)) {
+      final profile = e['profiles'] as Map<String, dynamic>?;
+      final sportName = e['sports']?['name'] ?? 'Etkinlik';
+      if (profile != null) {
+        activities.add({
+          'type': 'created',
+          'user_id': e['host_id'],
+          'full_name': profile['full_name'],
+          'avatar_url': profile['avatar_url'],
+          'event_title': e['title'] ?? '$sportName Maçı',
+          'sport_name': sportName,
+          'created_at': DateTime.parse(e['created_at']).toLocal(),
+        });
+      }
+    }
+
+    // Sort by most recent
+    activities.sort((a, b) => (b['created_at'] as DateTime).compareTo(a['created_at'] as DateTime));
+    
+    // Return top 5 recent activities to keep it focused
+    return activities.take(5).toList();
+  } catch (e) {
+    debugPrint('Social pressure provider error: $e');
+    return [];
+  }
+});
 
 final weeklyStatsProvider = FutureProvider.autoDispose<Map<String, dynamic>>((
   ref,
@@ -286,6 +385,8 @@ class HomeScreen extends ConsumerWidget {
               _buildHeader(context, ref),
               const SizedBox(height: 16),
               _buildActionButtons(context, ref),
+              const SizedBox(height: 24),
+              _buildSocialPressureSection(context, ref),
               const SizedBox(height: 32),
               _buildSectionTitle('Senin İçin Etkinlikler'),
               _buildRecommendedEvents(context),
@@ -336,6 +437,10 @@ class HomeScreen extends ConsumerWidget {
   Widget _buildHeader(BuildContext context, WidgetRef ref) {
     final profileAsync = ref.watch(currentUserProfileProvider);
     final unreadCount = ref.watch(unreadNotificationsCountProvider);
+    final user = ref.read(authRepositoryProvider).currentUser;
+    
+    final xpAsync = user != null ? ref.watch(userXPProfileProvider(user.id)) : const AsyncValue.loading();
+    final mfAsync = user != null ? ref.watch(userMFBalanceProvider(user.id)) : const AsyncValue.loading();
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
@@ -392,21 +497,41 @@ class HomeScreen extends ConsumerWidget {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 4),
                     Row(
                       children: [
-                        Icon(
-                          Icons.location_on,
-                          color: Colors.white.withOpacity(0.5),
-                          size: 12,
-                        ),
+                        // Trust Score
+                        const Icon(Icons.security, color: Colors.blue, size: 14),
                         const SizedBox(width: 4),
                         Text(
-                          location,
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.5),
-                            fontSize: 12,
+                          '${p?['trust_score'] ?? 0}',
+                          style: const TextStyle(color: Colors.blue, fontSize: 13, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(width: 12),
+                        
+                        // XP
+                        const Icon(Icons.stars, color: Colors.amber, size: 14),
+                        const SizedBox(width: 4),
+                        xpAsync.when(
+                          data: (xpData) => Text(
+                            '${xpData?['xp_amount'] ?? 0} XP',
+                            style: const TextStyle(color: Colors.amber, fontSize: 13, fontWeight: FontWeight.bold),
                           ),
+                          loading: () => const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.amber)),
+                          error: (_, __) => const Text('0 XP', style: TextStyle(color: Colors.amber, fontSize: 13, fontWeight: FontWeight.bold)),
+                        ),
+                        const SizedBox(width: 12),
+
+                        // MF Points
+                        const Icon(Icons.monetization_on, color: MatchFitTheme.accentGreen, size: 14),
+                        const SizedBox(width: 4),
+                        mfAsync.when(
+                          data: (mfData) => Text(
+                            '${mfData?['balance'] ?? 0} MF',
+                            style: const TextStyle(color: MatchFitTheme.accentGreen, fontSize: 13, fontWeight: FontWeight.bold),
+                          ),
+                          loading: () => const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2, color: MatchFitTheme.accentGreen)),
+                          error: (_, __) => const Text('0 MF', style: TextStyle(color: MatchFitTheme.accentGreen, fontSize: 13, fontWeight: FontWeight.bold)),
                         ),
                       ],
                     ),
@@ -443,6 +568,10 @@ class HomeScreen extends ConsumerWidget {
                 ),
               ),
             ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.emoji_events_outlined, color: Colors.amber),
+            onPressed: () => context.push('/leaderboard'),
           ),
           IconButton(
             icon: const Icon(Icons.search, color: Colors.white),
@@ -525,6 +654,135 @@ class HomeScreen extends ConsumerWidget {
       loading: () => const SizedBox.shrink(),
       error: (_, __) => const SizedBox.shrink(),
     );
+  }
+
+  Widget _buildSocialPressureSection(BuildContext context, WidgetRef ref) {
+    final activitiesAsync = ref.watch(socialPressureProvider);
+
+    return activitiesAsync.when(
+      data: (activities) {
+        if (activities.isEmpty) return const SizedBox.shrink();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  const Icon(Icons.people_alt_outlined, color: Colors.white54, size: 18),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Ağındaki Hareketler',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                    ),
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.local_fire_department, color: Colors.red, size: 12),
+                        SizedBox(width: 4),
+                        Text('Canlı', style: TextStyle(color: Colors.red, fontSize: 10, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E1E1E),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white10),
+              ),
+              child: ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(0),
+                itemCount: activities.length,
+                separatorBuilder: (context, index) => const Divider(color: Colors.white10, height: 1),
+                itemBuilder: (context, index) {
+                  final act = activities[index];
+                  final isCreation = act['type'] == 'created';
+                  final timeAgo = _getTimeAgo(act['created_at'] as DateTime);
+                  
+                  return ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    leading: AvatarWidget(
+                      name: act['full_name'] ?? 'U',
+                      avatarUrl: act['avatar_url'],
+                      radius: 20,
+                    ),
+                    title: RichText(
+                      text: TextSpan(
+                        style: const TextStyle(fontSize: 13, color: Colors.white),
+                        children: [
+                          TextSpan(text: act['full_name'], style: const TextStyle(fontWeight: FontWeight.bold)),
+                          TextSpan(text: isCreation ? ' yeni bir ' : ' şu maça katıldı: ', style: const TextStyle(color: Colors.white70)),
+                          TextSpan(text: '${act['sport_name']} ', style: const TextStyle(color: MatchFitTheme.accentGreen, fontWeight: FontWeight.w600)),
+                          if (isCreation) const TextSpan(text: 'maçı kurdu.', style: TextStyle(color: Colors.white70)),
+                        ],
+                      ),
+                    ),
+                    subtitle: Text(
+                      timeAgo,
+                      style: const TextStyle(color: Colors.white38, fontSize: 11),
+                    ),
+                    trailing: Icon(
+                      isCreation ? Icons.add_circle_outline : _getSportIcon(act['sport_name'] as String),
+                      color: isCreation ? Colors.blue : MatchFitTheme.accentGreen,
+                      size: 20,
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (_, __) => const SizedBox.shrink(),
+    );
+  }
+
+  IconData _getSportIcon(String sportName) {
+    final lower = sportName.toLowerCase();
+    if (lower.contains('tenis') || lower.contains('padel')) return Icons.sports_tennis;
+    if (lower.contains('basketbol')) return Icons.sports_basketball;
+    if (lower.contains('futbol') || lower.contains('saha')) return Icons.sports_soccer;
+    if (lower.contains('voleybol')) return Icons.sports_volleyball;
+    if (lower.contains('koşu') || lower.contains('run') || lower.contains('sprint')) return Icons.directions_run;
+    if (lower.contains('bisiklet') || lower.contains('mtb')) return Icons.directions_bike;
+    if (lower.contains('ağırlık') || lower.contains('training') || lower.contains('cross')) return Icons.fitness_center;
+    if (lower.contains('yürüyüş') || lower.contains('trekking')) return Icons.hiking;
+    if (lower.contains('yüzme') || lower.contains('kürek') || lower.contains('sörf') || lower.contains('paddle') || lower.contains('sup')) return Icons.pool;
+    if (lower.contains('boks') || lower.contains('mma') || lower.contains('jitsu')) return Icons.sports_mma;
+    if (lower.contains('yoga') || lower.contains('pilates') || lower.contains('meditasyon')) return Icons.self_improvement;
+    if (lower.contains('kayak') || lower.contains('snowboard')) return Icons.snowboarding;
+    if (lower.contains('tırmanış') || lower.contains('boulder')) return Icons.terrain;
+    if (lower.contains('motor') || lower.contains('atv') || lower.contains('enduro')) return Icons.motorcycle;
+    return Icons.sports_kabaddi;
+  }
+
+  String _getTimeAgo(DateTime dateTime) {
+    final diff = DateTime.now().difference(dateTime);
+    if (diff.inMinutes < 60) {
+      return '${diff.inMinutes} dakika önce';
+    } else if (diff.inHours < 24) {
+      return '${diff.inHours} saat önce';
+    } else {
+      return '${diff.inDays} gün önce';
+    }
   }
 
   Widget _buildRecommendedEvents(BuildContext context) {
