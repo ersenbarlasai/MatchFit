@@ -16,6 +16,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:matchfit/features/xp_engine/providers/xp_engine_provider.dart';
 import 'package:matchfit/features/economy_engine/providers/economy_engine_provider.dart';
+import 'package:matchfit/features/home/presentation/widgets/matchup_module.dart';
 
 // ── Providers ──────────────────────────────────────────────────────
 
@@ -360,6 +361,8 @@ class HomeScreen extends ConsumerWidget {
               _buildHeader(context, ref),
               const SizedBox(height: 16),
               _buildHeroEvent(context, ref),
+              const SizedBox(height: 24),
+              const MatchUpModule(),
               const SizedBox(height: 24),
               _buildCompactSocialFeed(context, ref),
               const SizedBox(height: 24),
