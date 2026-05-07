@@ -27,3 +27,13 @@ final currentUserProfileProvider = FutureProvider.autoDispose<Map<String, dynami
 
   return mergedProfile;
 });
+
+final userProfileProvider = FutureProvider.autoDispose.family<Map<String, dynamic>?, String>((ref, userId) async {
+  final response = await Supabase.instance.client
+      .from('profiles')
+      .select('full_name, avatar_url, trust_score, bio, city, district')
+      .eq('id', userId)
+      .maybeSingle();
+
+  return response;
+});

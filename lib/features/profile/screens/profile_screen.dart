@@ -14,6 +14,7 @@ import '../../xp_engine/providers/xp_engine_provider.dart';
 import '../../economy_engine/providers/economy_engine_provider.dart';
 import '../../coach_engine/providers/coach_provider.dart';
 import 'gamification_info_screen.dart';
+import '../../events/widgets/event_calendar_module.dart';
 
 // ── Providers ──────────────────────────────────────────────────────
 
@@ -44,7 +45,7 @@ final profileDataProvider = FutureProvider.autoDispose
         profile = await sb
             .from('profiles')
             .select(
-              'full_name, trust_score, avatar_url, cover_url, accepts_partnership, city, district, created_at',
+              'full_name, trust_score, avatar_url, cover_url, accepts_partnership, city, district, created_at, bio',
             )
             .eq('id', targetId)
             .maybeSingle();
@@ -173,7 +174,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 6, vsync: this);
+    _tabController = TabController(length: 7, vsync: this);
   }
 
   @override
@@ -714,6 +715,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                           );
                                         }).toList(),
                                       ),
+                                      if (data['bio'] != null && data['bio'].toString().isNotEmpty) ...[
+                                        const SizedBox(height: 12),
+                                        Text(
+                                          data['bio'],
+                                          style: TextStyle(
+                                            color: Colors.white.withOpacity(0.6),
+                                            fontSize: 13,
+                                            height: 1.4,
+                                          ),
+                                          maxLines: 3,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
                                     ],
                                   ),
                                 ),
@@ -895,6 +909,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                     fontSize: 13,
                   ),
                   tabs: const [
+                    Tab(text: 'Takvim'),
                     Tab(text: 'XP & Puan'),
                     Tab(text: 'Güven & Rozetler'),
                     Tab(text: 'MatchFit Evreni'),
@@ -912,6 +927,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       body: TabBarView(
         controller: _tabController,
         children: [
+          EventCalendarModule(userId: widget.userId ?? ref.read(authRepositoryProvider).currentUser?.id ?? ''),
           _XPTab(userId: widget.userId),
           _TrustBadgesTab(userId: widget.userId),
           const GamificationRulesContent(),

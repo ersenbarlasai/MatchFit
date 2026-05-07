@@ -22,6 +22,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   final _lastNameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _birthDateController = TextEditingController();
+  final _bioController = TextEditingController();
 
   String? _selectedCity;
   String? _selectedDistrict;
@@ -60,6 +61,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       _selectedDistrict = profile['district'];
       _avatarUrl = profile['avatar_url'];
       _coverUrl = profile['cover_url'];
+      _bioController.text = profile['bio'] ?? '';
       _acceptsFollowRequests = profile['accepts_follow_requests'] ?? true;
     }
   }
@@ -70,6 +72,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     _lastNameController.dispose();
     _phoneController.dispose();
     _birthDateController.dispose();
+    _bioController.dispose();
     super.dispose();
   }
 
@@ -191,6 +194,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             'last_name': _lastNameController.text.trim(),
             'phone': _phoneController.text.trim(),
             'birth_date': _selectedBirthDate?.toIso8601String(),
+            'bio': _bioController.text.trim(),
             'city': _selectedCity,
             'district': _selectedDistrict,
             'accepts_follow_requests': _acceptsFollowRequests,
@@ -493,6 +497,12 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                     ),
 
                     const SizedBox(height: 32),
+                    _buildLabel(t.bio),
+                    _buildTextField(
+                      _bioController,
+                      t.aboutYou,
+                      keyboardType: TextInputType.multiline,
+                    ),
                     _buildSectionHeader(t.city),
 
                     _buildLabel(t.province),

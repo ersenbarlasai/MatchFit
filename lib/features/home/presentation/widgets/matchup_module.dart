@@ -6,6 +6,7 @@ import 'package:matchfit/core/theme.dart';
 import 'package:matchfit/core/widgets/avatar_widget.dart';
 import 'package:matchfit/core/providers/profile_provider.dart';
 import 'package:matchfit/features/matchmaker/providers/matchmaker_provider.dart';
+import 'package:matchfit/features/profile/models/trust_system.dart';
 
 class MatchUpModule extends ConsumerStatefulWidget {
   const MatchUpModule({super.key});
@@ -66,27 +67,44 @@ class _MatchUpModuleState extends ConsumerState<MatchUpModule>
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.all(24),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: const Color(0xFF1A1A1A),
         borderRadius: BorderRadius.circular(32),
         border: Border.all(
-          color: MatchFitTheme.accentGreen.withOpacity(0.2),
+          color: MatchFitTheme.primaryBlue.withOpacity(0.3),
           width: 1.5,
         ),
         boxShadow: [
           BoxShadow(
-            color: MatchFitTheme.accentGreen.withOpacity(0.05),
-            blurRadius: 30,
+            color: MatchFitTheme.primaryBlue.withOpacity(0.1),
+            blurRadius: 40,
+            spreadRadius: 2,
             offset: const Offset(0, 10),
+          ),
+          BoxShadow(
+            color: MatchFitTheme.primaryBlue.withOpacity(0.05),
+            blurRadius: 10,
+            spreadRadius: -2,
           ),
         ],
       ),
-      child: Column(
+      child: Stack(
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
+          Positioned.fill(
+            child: CustomPaint(
+              painter: DiagonalPatternPainter(
+                color: MatchFitTheme.primaryBlue.withOpacity(0.05),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
               // Current User
               Column(
                 children: [
@@ -207,14 +225,20 @@ class _MatchUpModuleState extends ConsumerState<MatchUpModule>
           ),
           if (matchupState.matchedUser != null) ...[
             const SizedBox(height: 8),
-            Text(
-              'Bugün ${matchupState.matchedUser!['full_name']} ile spor yapabilirsin!',
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: MatchFitTheme.accentGreen,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
+            Builder(
+              builder: (context) {
+                final score = int.tryParse(matchupState.matchedUser!['trust_score']?.toString() ?? '') ?? 0;
+                final info = getTrustLevelInfo(score);
+                return Text(
+                  'Bugün ${matchupState.matchedUser!['full_name']} (${info.label} • $score Puan) ile spor yapabilirsin!',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: MatchFitTheme.accentGreen,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                );
+              },
             ),
           ],
           const SizedBox(height: 24),
@@ -263,10 +287,13 @@ class _MatchUpModuleState extends ConsumerState<MatchUpModule>
               style: const TextStyle(color: Colors.redAccent, fontSize: 12),
             ),
           ],
-        ],
-      ),
-    );
-  }
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
   Widget _buildPlaceholder(bool isLoading) {
     return Container(
@@ -294,4 +321,30 @@ class _MatchUpModuleState extends ConsumerState<MatchUpModule>
       ),
     );
   }
+}
+
+class DiagonalPatternPainter extends CustomPainter {
+  final Color color;
+
+  DiagonalPatternPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1.0;
+
+    const double spacing = 30.0;
+
+    for (double i = -size.height; i < size.width; i += spacing) {
+      canvas.drawLine(
+        Offset(i, 0),
+        Offset(i + size.height, size.height),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

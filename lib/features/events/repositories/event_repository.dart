@@ -45,7 +45,7 @@ class EventRepository {
     final response = await _supabase
         .from('events')
         .select(
-          '*, sports(name, category), profiles(full_name, trust_score, avatar_url)',
+          '*, sports(name, category), profiles(full_name, trust_score, avatar_url, bio)',
         )
         .eq('id', eventId)
         .maybeSingle();
@@ -73,6 +73,8 @@ class EventRepository {
               'profiles': {
                 'full_name': e['host_name'],
                 'avatar_url': e['host_avatar'],
+                'trust_score': e['host_trust'],
+                'bio': e['host_bio'],
               },
             }),
           )
@@ -82,7 +84,7 @@ class EventRepository {
       final response = await _supabase
           .from('events')
           .select(
-            '*, sports(name, category), profiles(full_name, trust_score, avatar_url)',
+            '*, sports(name, category), profiles(full_name, trust_score, avatar_url, bio)',
           )
           .eq('status', 'open')
           .eq('is_archived', false)
@@ -345,5 +347,47 @@ class EventRepository {
         .maybeSingle();
 
     return response != null;
+  }
+
+  Future<List<Map<String, dynamic>>> getUserMonthlyEvents(String userId, int year, int month) async {
+    final startDate = DateTime(year, month, 1);
+    final endDate = DateTime(year, month + 1, 0);
+
+    final startStr = '${startDate.year}-${startDate.month.toString().padLeft(2, '0')}-01';
+    final endStr = '${endDate.year}-${endDate.month.toString().padLeft(2, '0')}-${endDate.day.toString().padLeft(2, '0')}';
+
+    // Fetch hosted events
+    final hostedResponse = await _supabase
+        .from('events')
+        .select('*, sports(name, category)')
+        .eq('host_id', userId)
+        .gte('event_date', startStr)
+        .lte('event_date', endStr);
+    
+    final List<Map<String, dynamic>> hostedEvents = List<Map<String, dynamic>>.from(hostedResponse).map((e) {
+      e['isHost'] = true;
+      return e;
+    }).toList();
+
+    // Fetch attended events
+    final attendedResponse = await _supabase
+        .from('event_participants')
+        .select('events(*, sports(name, category))')
+        .eq('user_id', userId)
+        .eq('status', 'joined');
+
+    final List<Map<String, dynamic>> attendedEvents = [];
+    for (var row in List<Map<String, dynamic>>.from(attendedResponse)) {
+      final event = row['events'];
+      if (event != null && event['event_date'] != null) {
+        final evDateStr = event['event_date'] as String;
+        if (evDateStr.compareTo(startStr) >= 0 && evDateStr.compareTo(endStr) <= 0) {
+          event['isHost'] = false;
+          attendedEvents.add(Map<String, dynamic>.from(event));
+        }
+      }
+    }
+
+    return [...hostedEvents, ...attendedEvents];
   }
 }

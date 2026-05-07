@@ -11,6 +11,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'dart:io' show Platform;
 import '../../auth/repositories/auth_repository.dart';
 import 'friend_upcoming_events_screen.dart' show participationStatusProvider;
+import 'package:matchfit/features/profile/models/trust_system.dart';
+import 'package:matchfit/core/providers/profile_provider.dart';
 
 // ── Roster Provider ────────────────────────────────────────────────
 
@@ -393,13 +395,14 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
       widget.event['event_date'] as String?,
       widget.event['start_time'] as String?,
     );
-    final hostProfile = widget.event['profiles'] as Map<String, dynamic>?;
-    final hostName = hostProfile?['full_name'] as String? ?? 'Host';
-    final hostAvatar = hostProfile?['avatar_url'] as String?;
-    final hostTrust =
-        int.tryParse(hostProfile?['trust_score']?.toString() ?? '') ?? 0;
-    final maxP =
-        int.tryParse(widget.event['max_participants']?.toString() ?? '') ?? 10;
+    
+    // Initial host data from previous screen (fallback)
+    final rawProfiles = widget.event['profiles'];
+    final Map<String, dynamic>? hostProfile = (rawProfiles is List && rawProfiles.isNotEmpty)
+        ? rawProfiles.first as Map<String, dynamic>
+        : (rawProfiles is Map<String, dynamic> ? rawProfiles : null);
+
+    final maxP = int.tryParse(widget.event['max_participants']?.toString() ?? '') ?? 10;
     final skillLevel = widget.event['required_level'] as String? ?? 'Open';
     final eventId = widget.event['id']?.toString() ?? '';
     final hostId = widget.event['host_id'] as String? ?? '';
@@ -407,271 +410,223 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     final isHost = currentUser != null && currentUser.id == hostId;
 
     final rosterAsync = ref.watch(eventRosterProvider(eventId));
-    final requestsAsync = isHost
-        ? ref.watch(joinRequestsProvider(eventId))
-        : null;
-
-    // Watch status in real-time
+    final requestsAsync = isHost ? ref.watch(joinRequestsProvider(eventId)) : null;
     final statusAsync = ref.watch(participationStatusProvider(eventId));
 
-    // Merge local state with stream state so the UI reflects the action instantly.
-    // If the realtime stream has a newer concrete status (rejected/joined), trust it.
     Map<String, dynamic>? participantData = statusAsync.value;
     final streamedStatus = participantData?['status'] as String?;
-    if (_participantStatus == 'pending' &&
-        (streamedStatus == null || streamedStatus == 'pending')) {
+    if (_participantStatus == 'pending' && (streamedStatus == null || streamedStatus == 'pending')) {
       participantData = Map<String, dynamic>.from(participantData ?? {});
       participantData['status'] = 'pending';
     } else if (streamedStatus != null && streamedStatus != 'pending') {
       _participantStatus = null;
     }
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF121212),
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: GestureDetector(
-          onTap: () => context.canPop() ? context.pop() : context.go('/home'),
-          child: Container(
-            margin: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.4),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.arrow_back, color: Colors.white),
-          ),
-        ),
-        title: const Text(
-          'Etkinlik Detayları',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        actions: [
-          GestureDetector(
-            onTap: _showShareBottomSheet,
-            child: Container(
-              margin: const EdgeInsets.only(right: 12),
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.4),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.share_outlined,
-                color: Colors.white,
-                size: 20,
-              ),
-            ),
-          ),
-        ],
+    // Fetch fresh profile data to ensure trust score and bio are up-to-date
+    final freshProfileAsync = ref.watch(userProfileProvider(hostId));
+
+    return freshProfileAsync.when(
+      loading: () => const Scaffold(
+        backgroundColor: Color(0xFF0A0A0A),
+        body: Center(child: CircularProgressIndicator(color: MatchFitTheme.accentGreen)),
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _HeroSection(
-                    sport: sport,
-                    sportIcon: _sportIcon(sport),
-                    gradientColor: _sportGradient(sport),
+      error: (err, stack) => Scaffold(body: Center(child: Text('Hata: $err'))),
+      data: (freshProfile) {
+        final hostName = freshProfile?['full_name'] as String? ?? hostProfile?['full_name'] as String? ?? 'Host';
+        final hostAvatar = freshProfile?['avatar_url'] as String? ?? hostProfile?['avatar_url'] as String?;
+        final hostTrust = int.tryParse(freshProfile?['trust_score']?.toString() ?? hostProfile?['trust_score']?.toString() ?? '') ?? 0;
+        final hostBio = freshProfile?['bio'] as String? ?? hostProfile?['bio'] as String?;
+
+        return Scaffold(
+          backgroundColor: const Color(0xFF0A0A0A),
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            leading: GestureDetector(
+              onTap: () => context.canPop() ? context.pop() : context.go('/home'),
+              child: Container(
+                margin: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.4),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.arrow_back, color: Colors.white),
+              ),
+            ),
+            title: const Text(
+              'Etkinlik Detayları',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+            actions: [
+              GestureDetector(
+                onTap: _showShareBottomSheet,
+                child: Container(
+                  margin: const EdgeInsets.only(right: 12),
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.4),
+                    shape: BoxShape.circle,
                   ),
-
-                  Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
+                  child: const Icon(
+                    Icons.share_outlined,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          body: Column(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _HeroSection(
+                        sport: sport,
+                        sportIcon: _sportIcon(sport),
+                        gradientColor: _sportGradient(sport),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _Badge(
-                              label: sport,
-                              color: const Color(0xFF0052FF),
+                            Row(
+                              children: [
+                                _Badge(
+                                  label: sport,
+                                  color: const Color(0xFF0052FF),
+                                ),
+                                const SizedBox(width: 8),
+                                _Badge(
+                                  label: skillLevel,
+                                  color: const Color(0xFF2A2A2A),
+                                  textColor: Colors.white70,
+                                ),
+                              ],
                             ),
-                            const SizedBox(width: 8),
-                            _Badge(
-                              label: skillLevel,
-                              color: const Color(0xFF2A2A2A),
-                              textColor: Colors.white70,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 14),
-
-                        Text(
-                          title,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 26,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-
-                        Row(
-                          children: [
-                            const Icon(
-                              Icons.calendar_today_outlined,
-                              size: 14,
-                              color: Colors.white54,
-                            ),
-                            const SizedBox(width: 6),
+                            const SizedBox(height: 14),
                             Text(
-                              date,
+                              title,
                               style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 13,
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 24,
                               ),
                             ),
-                            const SizedBox(width: 16),
-                            const Icon(
-                              Icons.attach_money,
-                              size: 14,
-                              color: Colors.white54,
+                            const SizedBox(height: 12),
+                            _InfoRow(
+                              icon: Icons.calendar_today_outlined,
+                              text: date,
                             ),
+                            const SizedBox(height: 8),
+                            _InfoRow(
+                              icon: Icons.location_on_outlined,
+                              text: location,
+                            ),
+                            const SizedBox(height: 8),
+                            _InfoRow(
+                              icon: Icons.people_outline,
+                              text: '$maxP Kişi (Maksimum)',
+                            ),
+                            const SizedBox(height: 32),
                             const Text(
-                              'Ücretsiz',
+                              'Açıklama',
                               style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: 13,
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 17,
                               ),
                             ),
+                            const SizedBox(height: 10),
                             Text(
-                              ' / oyuncu',
+                              description,
                               style: TextStyle(
-                                color: Colors.white.withOpacity(0.35),
-                                fontSize: 13,
+                                color: Colors.white.withOpacity(0.6),
+                                fontSize: 14,
+                                height: 1.5,
                               ),
                             ),
+                            const SizedBox(height: 32),
+                            const _Divider(),
+                            const SizedBox(height: 24),
+                            const Text(
+                              'Konum',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 17,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            _LocationCard(
+                              location: location,
+                              lat: widget.event['lat'] as double?,
+                              lng: widget.event['lng'] as double?,
+                            ),
+                            const SizedBox(height: 32),
+                            const _Divider(),
+                            const SizedBox(height: 24),
+                            const Text(
+                              'Düzenleyen',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 17,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            _HostCard(
+                              hostId: hostId,
+                              hostName: hostName,
+                              avatarUrl: hostAvatar,
+                              trustScore: hostTrust,
+                              bio: hostBio,
+                            ),
+                            const SizedBox(height: 32),
+                            const _Divider(),
+                            const SizedBox(height: 32),
+                            if (isHost && requestsAsync != null) ...[
+                              requestsAsync.when(
+                                data: (reqs) => _JoinRequestsSection(
+                                  requests: reqs,
+                                  onUpdate: () => ref.invalidate(joinRequestsProvider(eventId)),
+                                ),
+                                loading: () => const Center(child: CircularProgressIndicator()),
+                                error: (err, _) => Text('Hata: $err'),
+                              ),
+                              const SizedBox(height: 32),
+                            ],
+                            rosterAsync.when(
+                              data: (roster) => _RosterSection(
+                                roster: roster,
+                                maxParticipants: maxP,
+                              ),
+                              loading: () => const Center(child: CircularProgressIndicator()),
+                              error: (err, _) => Text('Hata: $err'),
+                            ),
+                            const SizedBox(height: 40),
                           ],
                         ),
-
-                        const SizedBox(height: 28),
-                        const _Divider(),
-
-                        const SizedBox(height: 20),
-                        const Text(
-                          'Etkinlik Hakkında',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 17,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          description,
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.6),
-                            fontSize: 14,
-                            height: 1.6,
-                          ),
-                        ),
-
-                        const SizedBox(height: 24),
-                        const _Divider(),
-
-                        const SizedBox(height: 20),
-                        const Text(
-                          'Konum',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 17,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        _LocationCard(
-                          location: location,
-                          lat: widget.event['lat'] as double?,
-                          lng: widget.event['lng'] as double?,
-                        ),
-
-                        const SizedBox(height: 24),
-                        const _Divider(),
-
-                        const SizedBox(height: 20),
-                        const Text(
-                          'Düzenleyen',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 17,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        _HostCard(
-                          hostId: hostId,
-                          hostName: hostName,
-                          avatarUrl: hostAvatar,
-                          trustScore: hostTrust,
-                        ),
-
-                        if (isHost) ...[
-                          const SizedBox(height: 24),
-                          const _Divider(),
-                          const SizedBox(height: 20),
-                          requestsAsync?.when(
-                                loading: () => const SizedBox(),
-                                error: (err, stack) => Padding(
-                                  padding: const EdgeInsets.all(8.0),
-                                  child: Text(
-                                    'İstekler yüklenirken hata oluştu: $err',
-                                    style: const TextStyle(
-                                      color: Colors.red,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                                data: (requests) => _JoinRequestsSection(
-                                  requests: requests,
-                                  onUpdate: () {
-                                    ref.invalidate(
-                                      joinRequestsProvider(eventId),
-                                    );
-                                    ref.invalidate(
-                                      eventRosterProvider(eventId),
-                                    );
-                                  },
-                                ),
-                              ) ??
-                              const SizedBox(),
-                        ],
-
-                        const SizedBox(height: 24),
-                        const _Divider(),
-
-                        const SizedBox(height: 20),
-                        rosterAsync.when(
-                          loading: () => const SizedBox(),
-                          error: (_, __) => const SizedBox(),
-                          data: (roster) => _RosterSection(
-                            roster: roster,
-                            maxParticipants: maxP,
-                          ),
-                        ),
-
-                        const SizedBox(height: 100),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
+              _BottomCta(
+                event: widget.event,
+                isHost: isHost,
+                participantData: participantData,
+                isJoining: _isJoining,
+                onJoin: _joinEvent,
+                onDelete: _deleteEvent,
+              ),
+            ],
           ),
-
-          _BottomCta(
-            event: widget.event,
-            isHost: isHost,
-            participantData: participantData,
-            isJoining: _isJoining,
-            onJoin: _joinEvent,
-            onDelete: _deleteEvent,
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -920,11 +875,13 @@ class _HostCard extends StatelessWidget {
   final String hostName;
   final String? avatarUrl;
   final int trustScore;
+  final String? bio;
   const _HostCard({
     required this.hostId,
     required this.hostName,
     this.avatarUrl,
     required this.trustScore,
+    this.bio,
   });
 
   @override
@@ -1000,24 +957,38 @@ class _HostCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          Text(
-            _getTrustDescription(trustScore),
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.5),
-              fontSize: 13,
-              height: 1.5,
-            ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Builder(
+                builder: (context) {
+                  final info = getTrustLevelInfo(trustScore);
+                  return Text(
+                    'Güvenilirlik Seviyesi: ${info.label}',
+                    style: TextStyle(
+                      color: info.color,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  );
+                },
+              ),
+              if (bio != null && bio!.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(
+                  bio!,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.5),
+                    fontSize: 13,
+                    height: 1.5,
+                  ),
+                ),
+              ],
+            ],
           ),
         ],
       ),
     );
-  }
-
-  String _getTrustDescription(int score) {
-    if (score >= 80) return 'Yüksek güven puanına sahip onaylı organizatör.';
-    if (score >= 50) return 'Standart güven düzeyine sahip organizatör.';
-    if (score > 0) return 'Düşük güven puanına sahip organizatör. Lütfen dikkatli olunuz.';
-    return 'Henüz güven puanı oluşmamış yeni organizatör.';
   }
 }
 
@@ -1720,6 +1691,32 @@ class _CooldownButtonState extends State<_CooldownButton> {
           letterSpacing: 1.0,
         ),
       ),
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  final IconData icon;
+  final String text;
+
+  const _InfoRow({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: Colors.white54),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 14,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
