@@ -108,11 +108,11 @@ class CoachEngineRepository {
   /// Internal log function for Agent memory
   Future<void> _logAgentAction(String coachId, String agentName, String actionType, Map<String, dynamic> details) async {
     try {
-      await _supabase.from('coach_verification_logs').insert({
-        'coach_id': coachId,
-        'agent_name': agentName,
-        'action_type': actionType,
-        'details': details,
+      await _supabase.rpc('log_coach_verification_event', params: {
+        'p_coach_id': coachId,
+        'p_agent_name': agentName,
+        'p_action_type': actionType,
+        'p_details': details,
       });
     } catch (e) {
       debugPrint('[@CoachEngine] Failed to log agent action: $e');

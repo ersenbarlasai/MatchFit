@@ -1,10 +1,15 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:match_fit/features/fraud_detection/repositories/fraud_detection_repository.dart';
 
-final guardianRepositoryProvider = Provider((ref) => GuardianRepository());
+final guardianRepositoryProvider = Provider((ref) {
+  final fraudRepo = ref.read(fraudDetectionRepositoryProvider);
+  return GuardianRepository(fraudRepo);
+});
 
 class GuardianRepository {
   final _supabase = Supabase.instance.client;
+  final FraudDetectionRepository _fraudRepo;
+
+  GuardianRepository(this._fraudRepo);
 
   /// Checks if a new user has completed the 48-hour barrier
   /// "Yeni Üye Bariyeri: Hesabı yeni açılmış kullanıcılar ilk 48 saat etkinlik oluşturamaz."
@@ -43,9 +48,31 @@ class GuardianRepository {
   }
 
   /// Verifies if coordinates are a valid sports facility (Mock POI Check)
-  Future<bool> validateEventLocation(double lat, double lng) async {
-    if (lat == 0.0 && lng == 0.0) return false;
+  Future<bool> validateEventLocation(double lat, double lng, {String? userId}) async {
+    if (lat == 0.0 && lng == 0.0) {
+      if (userId != null) {
+        await _fraudRepo.logFraudSignal(
+          userId: userId,
+          sourceAgent: '@Guardian',
+          signalType: 'invalid_location',
+          severity: 'medium',
+          metadata: {'lat': lat, 'lng': lng},
+        );
+      }
+      return false;
+    }
     return true;
+  }
+
+  /// Reports a text-based risk detected by Guardian
+  Future<void> reportTextRisk(String userId, String text, String word) async {
+    await _fraudRepo.logFraudSignal(
+      userId: userId,
+      sourceAgent: '@Guardian',
+      signalType: 'suspicious_text',
+      severity: 'medium',
+      metadata: {'text': text, 'flagged_word': word},
+    );
   }
 
   /// Reads the user's privacy settings from Supabase

@@ -107,6 +107,8 @@ class NotificationRepository {
     required String title,
     required String content,
     required String type,
+    String? eventId,
+    String? idempotencyKey,
     Map<String, dynamic>? data,
   }) async {
     final senderId = _supabase.auth.currentUser?.id;
@@ -119,6 +121,8 @@ class NotificationRepository {
         'p_type': type,
         'p_title': title,
         'p_message': content,
+        if (eventId != null) 'p_event_id': eventId,
+        if (idempotencyKey != null) 'p_idempotency_key': idempotencyKey,
         'p_data': data ?? <String, dynamic>{},
       },
     );

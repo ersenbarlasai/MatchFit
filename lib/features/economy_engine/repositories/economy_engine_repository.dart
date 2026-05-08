@@ -24,6 +24,7 @@ class EconomyEngineRepository {
     int amount,
     String source, {
     String description = '',
+    String? idempotencyKey,
   }) async {
     try {
       final user = _supabase.auth.currentUser;
@@ -36,6 +37,7 @@ class EconomyEngineRepository {
           'p_amount': amount,
           'p_source': source,
           'p_description': description,
+          if (idempotencyKey != null) 'p_idempotency_key': idempotencyKey,
         },
       );
 
@@ -78,6 +80,33 @@ class EconomyEngineRepository {
     } catch (e) {
       debugPrint('[@EconomyEngine] Error fetching MF ledger: $e');
       return [];
+    }
+  }
+
+  /// Ödül alım talebi oluşturur (Risk ve Trust kontrolü yapılır).
+  Future<Map<String, dynamic>> attemptRewardRedemption({
+    required String rewardId,
+    required int amount,
+    String? idempotencyKey,
+  }) async {
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) return {'status': 'error', 'reason': 'Auth required'};
+
+      final response = await _supabase.rpc(
+        'attempt_reward_redemption',
+        params: {
+          'p_user_id': user.id,
+          'p_reward_id': rewardId,
+          'p_amount': amount,
+          if (idempotencyKey != null) 'p_idempotency_key': idempotencyKey,
+        },
+      );
+
+      return Map<String, dynamic>.from(response);
+    } catch (e) {
+      debugPrint('[@EconomyEngine] Error attempting redemption: $e');
+      return {'status': 'error', 'reason': e.toString()};
     }
   }
 }
