@@ -35,6 +35,7 @@ class AvatarWidget extends StatefulWidget {
   final double radius;
   final String? avatarUrl;
   final bool editable;
+  final bool isVerified;
   final String? userId;
   final void Function(String newUrl)? onUploaded;
 
@@ -44,6 +45,7 @@ class AvatarWidget extends StatefulWidget {
     this.radius = 36,
     this.avatarUrl,
     this.editable = false,
+    this.isVerified = false,
     this.userId,
     this.onUploaded,
   });
@@ -162,24 +164,25 @@ class _AvatarWidgetState extends State<AvatarWidget> {
           ),
 
           // Verified badge (bottom right)
-          Positioned(
-            bottom: 0,
-            right: 0,
-            child: Container(
-              width: widget.radius * 0.5,
-              height: widget.radius * 0.5,
-              decoration: BoxDecoration(
-                color: MatchFitTheme.accentGreen,
-                shape: BoxShape.circle,
-                border: Border.all(color: const Color(0xFF121212), width: 2),
-              ),
-              child: Icon(
-                widget.editable ? Icons.camera_alt : Icons.verified,
-                size: widget.radius * 0.26,
-                color: Colors.black,
+          if (widget.editable || widget.isVerified)
+            Positioned(
+              bottom: 0,
+              right: 0,
+              child: Container(
+                width: widget.radius * 0.5,
+                height: widget.radius * 0.5,
+                decoration: BoxDecoration(
+                  color: widget.isVerified ? Colors.blue : MatchFitTheme.accentGreen,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFF121212), width: 2),
+                ),
+                child: Icon(
+                  widget.editable ? Icons.camera_alt : Icons.verified,
+                  size: widget.radius * 0.26,
+                  color: widget.isVerified ? Colors.white : Colors.black,
+                ),
               ),
             ),
-          ),
         ],
       ),
     );

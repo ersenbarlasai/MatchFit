@@ -409,6 +409,7 @@ class HomeScreen extends ConsumerWidget {
                 avatarUrl: p?['avatar_url'],
                 radius: 28,
                 editable: false,
+                isVerified: p?['is_coach'] ?? false,
               ),
               loading: () => const CircleAvatar(
                 radius: 28,

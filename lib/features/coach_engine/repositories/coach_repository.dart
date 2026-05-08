@@ -121,6 +121,33 @@ class CoachEngineRepository {
 
   // ── Admin Methods ─────────────────────────────────────────────────────────
 
+  /// Fetch all coaches regardless of status for full administration
+  Future<List<Map<String, dynamic>>> getAllCoaches() async {
+    try {
+      final response = await _supabase
+          .from('coaches')
+          .select('*, coach_documents(*)')
+          .order('updated_at', ascending: false);
+      
+      final coaches = List<Map<String, dynamic>>.from(response);
+
+      for (var coach in coaches) {
+        final profileResponse = await _supabase
+            .from('profiles')
+            .select('full_name, avatar_url, role')
+            .eq('id', coach['user_id'])
+            .maybeSingle();
+        
+        coach['profiles'] = profileResponse;
+      }
+
+      return coaches;
+    } catch (e) {
+      debugPrint('[@CoachEngine] Error fetching all coaches: $e');
+      return [];
+    }
+  }
+
   /// Fetch all coaches with 'pending' verification status
   Future<List<Map<String, dynamic>>> getPendingCoaches() async {
     try {
@@ -132,7 +159,6 @@ class CoachEngineRepository {
       
       final coaches = List<Map<String, dynamic>>.from(response);
 
-      // Fetch profiles manually to avoid foreign key join issues
       for (var coach in coaches) {
         final profileResponse = await _supabase
             .from('profiles')

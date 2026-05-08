@@ -5,3 +5,8 @@ final pendingCoachesProvider = FutureProvider<List<Map<String, dynamic>>>((ref) 
   final repo = ref.watch(coachEngineRepositoryProvider);
   return repo.getPendingCoaches();
 });
+
+final allCoachesProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final repo = ref.watch(coachEngineRepositoryProvider);
+  return repo.getAllCoaches();
+});

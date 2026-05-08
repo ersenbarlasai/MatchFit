@@ -45,7 +45,7 @@ final profileDataProvider = FutureProvider.autoDispose
         profile = await sb
             .from('profiles')
             .select(
-              'full_name, trust_score, avatar_url, cover_url, accepts_partnership, city, district, created_at, bio',
+              'full_name, trust_score, avatar_url, cover_url, accepts_partnership, city, district, created_at, bio, is_coach',
             )
             .eq('id', targetId)
             .maybeSingle();
@@ -54,10 +54,32 @@ final profileDataProvider = FutureProvider.autoDispose
         profile = await sb
             .from('profiles')
             .select(
-              'full_name, trust_score, avatar_url, accepts_partnership, city, district, created_at',
+              'full_name, trust_score, avatar_url, accepts_partnership, city, district, created_at, is_coach',
             )
             .eq('id', targetId)
             .maybeSingle();
+      }
+
+      if (profile == null) return {};
+
+      final mutableProfile = Map<String, dynamic>.from(profile);
+      bool isCoach = mutableProfile['is_coach'] ?? false;
+      
+      // Fallback: check coaches table directly
+      if (!isCoach) {
+        try {
+          final coachResp = await sb
+              .from('coaches')
+              .select('verification_level, is_active')
+              .eq('user_id', targetId)
+              .maybeSingle();
+          if (coachResp != null) {
+            final level = coachResp['verification_level'];
+            final isActive = coachResp['is_active'];
+            isCoach = (level != 'none' && level != 'pending' && isActive == true);
+            mutableProfile['is_coach'] = isCoach;
+          }
+        } catch (_) {}
       }
 
       final hosted = await sb
@@ -110,6 +132,7 @@ final profileDataProvider = FutureProvider.autoDispose
         'district': profile?['district'] ?? '',
         'joined_year': joinedYear,
         'user_id': targetId,
+        'is_coach': isCoach,
         'events_joined': (joined as List).length,
         'events_hosted': hostedList.length,
         'completion_pct': completionPct,
@@ -341,7 +364,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     String? partnershipStatus,
     List<String> earnedKeys,
   ) {
-    final name = data['full_name'] as String;
+    final name = data['full_name'] as String? ?? 'İsimsiz Kullanıcı';
     final trustScore = int.tryParse(data['trust_score']?.toString() ?? '') ?? 0;
     final joined = int.tryParse(data['events_joined']?.toString() ?? '') ?? 0;
     final hosted = int.tryParse(data['events_hosted']?.toString() ?? '') ?? 0;
@@ -593,6 +616,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                         ? avatarUrl
                                         : null,
                                     editable: isMe,
+                                    isVerified: data['is_coach'] ?? false,
                                     userId: userId,
                                     onUploaded: (url) {
                                       setState(() => _avatarUrl = url);
@@ -641,6 +665,25 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                               maxLines: 1,
                                             ),
                                           ),
+                                          if (data['is_coach'] == true) ...[
+                                            const SizedBox(width: 8),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                              decoration: BoxDecoration(
+                                                color: Colors.blue.withOpacity(0.2),
+                                                borderRadius: BorderRadius.circular(8),
+                                                border: Border.all(color: Colors.blue.withOpacity(0.5)),
+                                              ),
+                                              child: const Text(
+                                                'PRO COACH',
+                                                style: TextStyle(
+                                                  color: Colors.blue,
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
                                           const SizedBox(width: 8),
                                           Builder(
                                             builder: (context) {

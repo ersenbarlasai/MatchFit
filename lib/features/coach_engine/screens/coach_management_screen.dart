@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:go_router/go_router.dart';
 import 'package:matchfit/core/theme.dart';
 import '../providers/coach_admin_provider.dart';
 import '../providers/coach_provider.dart';
@@ -22,6 +23,11 @@ class CoachManagementScreen extends ConsumerWidget {
           style: TextStyle(color: MatchFitTheme.accentGreen, fontWeight: FontWeight.bold),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.people_alt_outlined, color: Colors.white),
+            tooltip: 'Tüm Koçlar',
+            onPressed: () => context.push('/admin/coach-directory'),
+          ),
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
             onPressed: () => ref.invalidate(pendingCoachesProvider),
@@ -45,7 +51,7 @@ class CoachManagementScreen extends ConsumerWidget {
             itemBuilder: (context, index) {
               final coach = coaches[index];
               final profile = coach['profiles'] as Map<String, dynamic>?;
-              final name = profile?['full_name'] ?? 'İsimsiz Kullanıcı';
+              final name = profile?['full_name'] as String? ?? 'İsimsiz Kullanıcı';
               final branch = coach['sub_branch'] ?? 'Belirtilmemiş';
               final experience = coach['experience_years'] ?? 0;
 

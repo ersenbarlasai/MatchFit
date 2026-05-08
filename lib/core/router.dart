@@ -26,6 +26,7 @@ import '../features/profile/screens/gamification_info_screen.dart';
 import '../features/explore/screens/user_search_screen.dart';
 import '../features/coach_engine/screens/coach_onboarding_info_screen.dart';
 import '../features/coach_engine/screens/coach_management_screen.dart';
+import '../features/coach_engine/screens/coach_directory_screen.dart';
 import '../features/chat/screens/chat_screen.dart';
 import '../features/chat/screens/conversations_screen.dart';
 import '../core/widgets/main_shell.dart';
@@ -100,6 +101,10 @@ final GoRouter appRouter = GoRouter(
         GoRoute(
           path: '/admin/coaches',
           builder: (context, state) => const CoachManagementScreen(),
+        ),
+        GoRoute(
+          path: '/admin/coach-directory',
+          builder: (context, state) => const CoachDirectoryScreen(),
         ),
         GoRoute(
           path: '/event-detail',
