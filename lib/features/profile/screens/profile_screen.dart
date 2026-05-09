@@ -2442,6 +2442,18 @@ class _InterestsTabState extends ConsumerState<_InterestsTab> {
     }
   }
 
+  IconData _getSportIcon(String sportName) {
+    final name = sportName.toLowerCase();
+    if (name.contains('football') || name.contains('soccer') || name.contains('futbol')) return Icons.sports_soccer;
+    if (name.contains('basketball') || name.contains('basketbol')) return Icons.sports_basketball;
+    if (name.contains('tennis') || name.contains('tenis') || name.contains('padel')) return Icons.sports_tennis;
+    if (name.contains('swimming') || name.contains('yüzme')) return Icons.pool;
+    if (name.contains('running') || name.contains('koşu')) return Icons.directions_run;
+    if (name.contains('cycling') || name.contains('bisiklet')) return Icons.directions_bike;
+    if (name.contains('volleyball') || name.contains('voleybol')) return Icons.sports_volleyball;
+    return Icons.sports;
+  }
+
   @override
   Widget build(BuildContext context) {
     final prefsAsync = ref.watch(userSportsPreferencesProvider(widget.userId));
@@ -2451,114 +2463,48 @@ class _InterestsTabState extends ConsumerState<_InterestsTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'My Interests',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w900,
-              fontSize: 22,
-            ),
-          ),
-          const SizedBox(height: 14),
           prefsAsync.when(
             loading: () => const Center(
-              child: CircularProgressIndicator(
-                color: MatchFitTheme.accentGreen,
+              child: Padding(
+                padding: EdgeInsets.only(top: 40),
+                child: CircularProgressIndicator(color: MatchFitTheme.accentGreen),
               ),
             ),
             error: (_, __) => const SizedBox.shrink(),
             data: (prefs) {
               if (prefs.isEmpty) {
-                return Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1A1A1A),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Text(
-                    'Henüz spor branşı eklenmedi.',
-                    style: TextStyle(color: Colors.white.withOpacity(0.4)),
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 40),
+                    child: Text(
+                      'Henüz ilgi alanı eklenmemiş.',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.3),
+                        fontSize: 14,
+                      ),
+                    ),
                   ),
                 );
               }
-              return Column(
-                children: prefs.map((pref) {
-                  final name =
-                      pref['sports']?['name'] as String? ?? 'Bilinmiyor';
-                  final level = pref['skill_level'] as String? ?? 'beginner';
-                  final lvlColor = _levelColors[level] ?? Colors.white54;
-                  final lvlLabel = _levelLabels[level] ?? level;
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 18,
-                      vertical: 16,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1A1A1A),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.white.withOpacity(0.07)),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 42,
-                          height: 42,
-                          decoration: BoxDecoration(
-                            color: MatchFitTheme.primaryBlue.withOpacity(0.12),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.sports,
-                            color: MatchFitTheme.primaryBlue,
-                            size: 20,
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                name,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 15,
-                                ),
-                              ),
-                              Text(
-                                lvlLabel,
-                                style: TextStyle(
-                                  color: lvlColor,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (widget.isMe)
-                          GestureDetector(
-                            onTap: () => _editSkillLevel(pref),
-                            child: Container(
-                              width: 34,
-                              height: 34,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.07),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.edit_rounded,
-                                color: Colors.white54,
-                                size: 16,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
+              return GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 5,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 16,
+                  childAspectRatio: 0.7,
+                ),
+                itemCount: prefs.length,
+                itemBuilder: (context, index) {
+                  final pref = prefs[index];
+                  final name = pref['sports']?['name'] as String? ?? '?';
+                  return _SportInterestCell(
+                    name: name,
+                    icon: _getSportIcon(name),
+                    onTap: widget.isMe ? () => _editSkillLevel(pref) : null,
                   );
-                }).toList(),
+                },
               );
             },
           ),
@@ -2961,6 +2907,63 @@ class _XPRuleItem extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SportInterestCell extends StatelessWidget {
+  final String name;
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  const _SportInterestCell({
+    required this.name,
+    required this.icon,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AspectRatio(
+            aspectRatio: 1,
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF1C1C1C),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white10),
+              ),
+              child: Center(
+                child: Icon(
+                  icon,
+                  color: MatchFitTheme.primaryBlue,
+                  size: 24,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Expanded(
+            child: Text(
+              name,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+                height: 1.2,
+              ),
             ),
           ),
         ],

@@ -6,7 +6,7 @@ import 'package:matchfit/core/theme.dart';
 import 'package:matchfit/core/widgets/avatar_widget.dart';
 import 'package:matchfit/core/providers/profile_provider.dart';
 import 'package:matchfit/features/matchmaker/providers/matchmaker_provider.dart';
-import 'package:matchfit/features/profile/models/trust_system.dart';
+
 
 class MatchUpModule extends ConsumerStatefulWidget {
   const MatchUpModule({super.key});
@@ -99,8 +99,9 @@ class _MatchUpModuleState extends ConsumerState<MatchUpModule>
             ),
           ),
           Padding(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -143,8 +144,31 @@ class _MatchUpModuleState extends ConsumerState<MatchUpModule>
                 ],
               ),
 
-              // Animated Icon or VS
-              Icon(Icons.bolt, color: MatchFitTheme.accentGreen, size: 32),
+              // Interactive Match Action
+              Semantics(
+                label: 'Eşleşme başlat',
+                child: IconButton(
+                  onPressed: matchupState.isLoading
+                      ? null
+                      : () => ref.read(matchupProvider.notifier).findMatch(),
+                  tooltip: 'Eşleşme başlat',
+                  splashRadius: 28,
+                  icon: matchupState.isLoading
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            color: MatchFitTheme.accentGreen,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : Icon(
+                          Icons.bolt,
+                          color: MatchFitTheme.accentGreen,
+                          size: 32,
+                        ),
+                ),
+              ),
 
               // Potential Match
               Column(
@@ -212,81 +236,7 @@ class _MatchUpModuleState extends ConsumerState<MatchUpModule>
               ),
             ],
           ),
-          const SizedBox(height: 24),
-          const Text(
-            'SPOR ARKADAŞIN SENİ BEKLİYOR',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 0.5,
-            ),
-          ),
-          if (matchupState.matchedUser != null) ...[
-            const SizedBox(height: 8),
-            Builder(
-              builder: (context) {
-                final score = int.tryParse(matchupState.matchedUser!['trust_score']?.toString() ?? '') ?? 0;
-                final info = getTrustLevelInfo(score);
-                return Text(
-                  'Bugün ${matchupState.matchedUser!['full_name']} (${info.label} • $score Puan) ile spor yapabilirsin!',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: MatchFitTheme.accentGreen,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                );
-              },
-            ),
-          ],
-          const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: matchupState.isLoading
-                ? null
-                : () => ref.read(matchupProvider.notifier).findMatch(),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: MatchFitTheme.accentGreen,
-              foregroundColor: Colors.black,
-              minimumSize: const Size(double.infinity, 60),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              elevation: 0,
-            ),
-            child: matchupState.isLoading
-                ? const SizedBox(
-                    height: 24,
-                    width: 24,
-                    child: CircularProgressIndicator(
-                      color: Colors.black,
-                      strokeWidth: 3,
-                    ),
-                  )
-                : Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text(
-                        'MATCH UP',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w900,
-                          fontSize: 18,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Icon(Icons.shuffle, size: 24),
-                    ],
-                  ),
-          ),
-          if (matchupState.error != null) ...[
-            const SizedBox(height: 12),
-            Text(
-              matchupState.error!,
-              style: const TextStyle(color: Colors.redAccent, fontSize: 12),
-            ),
-          ],
+
                 ],
               ),
             ),
