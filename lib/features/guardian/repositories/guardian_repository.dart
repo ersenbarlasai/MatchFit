@@ -1,4 +1,6 @@
-import 'package:match_fit/features/fraud_detection/repositories/fraud_detection_repository.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:matchfit/features/fraud_detection/repositories/fraud_detection_repository.dart';
 
 final guardianRepositoryProvider = Provider((ref) {
   final fraudRepo = ref.read(fraudDetectionRepositoryProvider);
@@ -47,32 +49,53 @@ class GuardianRepository {
     return false;
   }
 
-  /// Verifies if coordinates are a valid sports facility (Mock POI Check)
-  Future<bool> validateEventLocation(double lat, double lng, {String? userId}) async {
-    if (lat == 0.0 && lng == 0.0) {
-      if (userId != null) {
-        await _fraudRepo.logFraudSignal(
-          userId: userId,
-          sourceAgent: '@Guardian',
-          signalType: 'invalid_location',
-          severity: 'medium',
-          metadata: {'lat': lat, 'lng': lng},
-        );
-      }
-      return false;
-    }
-    return true;
-  }
+  Future<void> reportTextRisk({
+    required String userId,
+    required String text,
+    String? eventId,
+  }) async {
+    if (!scanForRisks(text)) return;
 
-  /// Reports a text-based risk detected by Guardian
-  Future<void> reportTextRisk(String userId, String text, String word) async {
     await _fraudRepo.logFraudSignal(
       userId: userId,
       sourceAgent: '@Guardian',
-      signalType: 'suspicious_text',
+      signalType: 'risky_text_detected',
       severity: 'medium',
-      metadata: {'text': text, 'flagged_word': word},
+      confidence: 1.0,
+      eventId: eventId,
+      metadata: {'text': text},
+      idempotencyKey:
+          'guardian:text:$userId:${eventId ?? 'none'}:${text.hashCode}',
     );
+  }
+
+  /// Verifies if coordinates are a valid sports facility (Mock POI Check)
+  Future<bool> validateEventLocation(double lat, double lng) async {
+    if (lat == 0.0 && lng == 0.0) return false;
+    return true;
+  }
+
+  Future<bool> validateEventLocationForUser({
+    required String userId,
+    required double lat,
+    required double lng,
+    String? eventId,
+  }) async {
+    final isValid = await validateEventLocation(lat, lng);
+    if (!isValid) {
+      await _fraudRepo.logFraudSignal(
+        userId: userId,
+        sourceAgent: '@Guardian',
+        signalType: 'invalid_location',
+        severity: 'high',
+        confidence: 1.0,
+        eventId: eventId,
+        metadata: {'lat': lat, 'lng': lng},
+        idempotencyKey:
+            'guardian:location:$userId:${eventId ?? 'none'}:$lat:$lng',
+      );
+    }
+    return isValid;
   }
 
   /// Reads the user's privacy settings from Supabase

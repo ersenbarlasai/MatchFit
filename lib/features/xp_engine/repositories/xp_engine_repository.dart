@@ -18,7 +18,6 @@ class XPEngineRepository {
     bool isWeekend = false,
     bool isNoShow = false,
     String abuseStatus = 'clean',
-    String? idempotencyKey,
   }) async {
     try {
       final user = _supabase.auth.currentUser;
@@ -37,7 +36,6 @@ class XPEngineRepository {
         'p_is_weekend': isWeekend,
         'p_is_no_show': isNoShow,
         'p_abuse_status': abuseStatus,
-        if (idempotencyKey != null) 'p_idempotency_key': idempotencyKey,
       });
 
       debugPrint('[@XPEngine] Gained base $amount XP from $source (Tier: $qualityTier)');

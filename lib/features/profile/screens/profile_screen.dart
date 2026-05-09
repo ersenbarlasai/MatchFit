@@ -45,7 +45,7 @@ final profileDataProvider = FutureProvider.autoDispose
         profile = await sb
             .from('profiles')
             .select(
-              'full_name, trust_score, avatar_url, cover_url, accepts_partnership, city, district, created_at, bio, is_coach',
+              'full_name, trust_score, avatar_url, cover_url, accepts_partnership, city, district, created_at, bio, is_coach, role',
             )
             .eq('id', targetId)
             .maybeSingle();
@@ -54,7 +54,7 @@ final profileDataProvider = FutureProvider.autoDispose
         profile = await sb
             .from('profiles')
             .select(
-              'full_name, trust_score, avatar_url, accepts_partnership, city, district, created_at, is_coach',
+              'full_name, trust_score, avatar_url, accepts_partnership, city, district, created_at, is_coach, role',
             )
             .eq('id', targetId)
             .maybeSingle();
@@ -121,15 +121,15 @@ final profileDataProvider = FutureProvider.autoDispose
           .eq('status', 'following');
 
       return {
-        'full_name': profile?['full_name'] ?? 'Player',
-        'trust_score': profile?['trust_score'] ?? 0,
-        'avatar_url': profile?['avatar_url'] as String? ?? '',
-        'cover_url': profile != null && profile.containsKey('cover_url')
+        'full_name': profile['full_name'] ?? 'Player',
+        'trust_score': profile['trust_score'] ?? 0,
+        'avatar_url': profile['avatar_url'] as String? ?? '',
+        'cover_url': profile.containsKey('cover_url')
             ? profile['cover_url'] as String?
             : null,
-        'accepts_partnership': profile?['accepts_partnership'] ?? true,
-        'city': profile?['city'] ?? 'Bilinmiyor',
-        'district': profile?['district'] ?? '',
+        'accepts_partnership': profile['accepts_partnership'] ?? true,
+        'city': profile['city'] ?? 'Bilinmiyor',
+        'district': profile['district'] ?? '',
         'joined_year': joinedYear,
         'user_id': targetId,
         'is_coach': isCoach,
@@ -139,6 +139,7 @@ final profileDataProvider = FutureProvider.autoDispose
         'posts_count': (posts as List).length,
         'followers_count': (followersRes as List).length,
         'following_count': (followingRes as List).length,
+        'role': profile['role'],
       };
     });
 
@@ -369,6 +370,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     final joined = int.tryParse(data['events_joined']?.toString() ?? '') ?? 0;
     final hosted = int.tryParse(data['events_hosted']?.toString() ?? '') ?? 0;
     final userId = data['user_id'] as String? ?? '';
+    final role = data['role']?.toString();
+    final isAdmin = role == 'admin' || role == 'system_admin';
     final isMe =
         widget.userId == null ||
         widget.userId == ref.read(authRepositoryProvider).currentUser?.id;
@@ -416,42 +419,68 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   return Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      coachProfileAsync.when(
-                        data: (coachData) {
-                          final level = coachData?['verification_level'] ?? 'none';
-                          
-                          if (level == 'none') {
-                            return IconButton(
-                              icon: const Icon(Icons.sports_outlined, color: Colors.amber),
-                              tooltip: 'Koç Ol',
-                              onPressed: () => context.push('/coach-info'),
-                            );
-                          } else if (level == 'pending') {
-                            return IconButton(
-                              icon: const Icon(Icons.hourglass_empty, color: Colors.white38),
-                              tooltip: 'Başvurunuz İncelemede',
-                              onPressed: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Başvurunuz inceleme aşamasındadır.')),
-                                );
-                              },
-                            );
-                          } else {
-                            // Already a verified coach
-                            return IconButton(
-                              icon: const Icon(Icons.verified, color: MatchFitTheme.accentGreen),
-                              tooltip: 'Koç Paneli',
-                              onPressed: () {
-                                // TODO: Navigate to Coach Dashboard
-                              },
-                            );
-                          }
-                        },
-                        loading: () => const SizedBox(width: 48, child: Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)))),
-                        error: (_, __) => const SizedBox(),
+                      // 1. Coaching Center
+                      if (isAdmin)
+                        IconButton(
+                          icon: const Icon(Icons.sports, color: MatchFitTheme.accentGreen),
+                          tooltip: 'Koçluk Yönetimi',
+                          onPressed: () => context.push('/coach-hub'),
+                        )
+                      else
+                        coachProfileAsync.when(
+                          data: (coachData) {
+                            final level = coachData?['verification_level'] ?? 'none';
+                            final isActive = coachData?['is_active'] ?? false;
+                            
+                            if (level == 'pending') {
+                              return IconButton(
+                                icon: const Icon(Icons.hourglass_empty, color: Colors.white38),
+                                tooltip: 'Başvurunuz İncelemede',
+                                onPressed: () {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Başvurunuz inceleme aşamasındadır.')),
+                                  );
+                                },
+                              );
+                            } else if (isActive && level != 'none' && level != 'pending') {
+                              return IconButton(
+                                icon: const Icon(Icons.sports, color: MatchFitTheme.accentGreen),
+                                tooltip: 'Koçluk Yönetimi',
+                                onPressed: () => context.push('/coach-hub'),
+                              );
+                            } else {
+                              return IconButton(
+                                icon: const Icon(Icons.sports_outlined, color: Colors.amber),
+                                tooltip: 'Koç Ol',
+                                onPressed: () => context.push('/coach-info'),
+                              );
+                            }
+                          },
+                          loading: () => const SizedBox(width: 48, child: Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)))),
+                          error: (_, __) => const SizedBox(),
+                        ),
+                      // 2. Sponsorship Center (Admin Only)
+                      if (isAdmin)
+                        IconButton(
+                          icon: const Icon(Icons.admin_panel_settings, color: Colors.purpleAccent),
+                          tooltip: 'Sponsor Yönetimi',
+                          onPressed: () => context.push('/admin/partners'),
+                        ),
+                      // 3. Reward Center
+                      IconButton(
+                        icon: const Icon(Icons.receipt_long, color: Colors.lightGreenAccent),
+                        tooltip: 'Ödüllerim',
+                        onPressed: () => context.push('/my-rewards'),
                       ),
                       IconButton(
+                        icon: const Icon(Icons.card_giftcard, color: Colors.amberAccent),
+                        tooltip: 'Ödül Mağazası',
+                        onPressed: () => context.push('/rewards'),
+                      ),
+                      // 4. Settings
+                      IconButton(
                         icon: const Icon(Icons.settings_outlined, color: Colors.white),
+                        tooltip: 'Ayarlar',
                         onPressed: () => context.push('/privacy-settings'),
                       ),
                     ],

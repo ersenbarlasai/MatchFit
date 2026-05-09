@@ -27,8 +27,20 @@ import '../features/explore/screens/user_search_screen.dart';
 import '../features/coach_engine/screens/coach_onboarding_info_screen.dart';
 import '../features/coach_engine/screens/coach_management_screen.dart';
 import '../features/coach_engine/screens/coach_directory_screen.dart';
+import '../features/coach_engine/screens/coach_marketplace_screen.dart';
+import '../features/coach_engine/screens/coach_detail_screen.dart';
+import '../features/coach_engine/screens/coach_sessions_screen.dart';
+import '../features/coach_engine/screens/coach_availability_screen.dart';
+import '../features/coach_engine/screens/coach_admin_hub_screen.dart';
 import '../features/chat/screens/chat_screen.dart';
 import '../features/chat/screens/conversations_screen.dart';
+import '../features/chat/screens/conversations_screen.dart';
+import '../features/partner_catalog/screens/reward_catalog_screen.dart';
+import '../features/partner_catalog/screens/reward_detail_screen.dart';
+import '../features/partner_catalog/screens/partner_admin_screen.dart';
+import '../features/partner_catalog/screens/redemption_history_screen.dart';
+import '../features/partner_catalog/screens/partner_application_screen.dart';
+import '../features/partner_catalog/screens/partner_detail_admin_screen.dart';
 import '../core/widgets/main_shell.dart';
 
 final GoRouter appRouter = GoRouter(
@@ -95,8 +107,32 @@ final GoRouter appRouter = GoRouter(
           builder: (context, state) => const CoachOnboardingInfoScreen(),
         ),
         GoRoute(
+          path: '/coaches',
+          builder: (context, state) => const CoachMarketplaceScreen(),
+        ),
+        GoRoute(
+          path: '/coach-detail',
+          builder: (context, state) {
+            final userId = state.extra is String ? state.extra as String : null;
+            if (userId == null) return const _MissingRouteDataScreen();
+            return CoachDetailScreen(userId: userId);
+          },
+        ),
+        GoRoute(
+          path: '/coach-sessions',
+          builder: (context, state) => const CoachSessionsScreen(),
+        ),
+        GoRoute(
+          path: '/coach-availability',
+          builder: (context, state) => const CoachAvailabilityScreen(),
+        ),
+        GoRoute(
           path: '/become-coach',
           builder: (context, state) => const BecomeCoachScreen(),
+        ),
+        GoRoute(
+          path: '/coach-hub',
+          builder: (context, state) => const CoachAdminHubScreen(),
         ),
         GoRoute(
           path: '/admin/coaches',
@@ -207,6 +243,34 @@ final GoRouter appRouter = GoRouter(
               initialTab: _intExtra(extra, 'initialTab') ?? 0,
             );
           },
+        ),
+        GoRoute(
+          path: '/rewards',
+          builder: (context, state) => const RewardCatalogScreen(),
+        ),
+        GoRoute(
+          path: '/reward-detail',
+          builder: (context, state) {
+            final rewardId = state.extra is String ? state.extra as String : null;
+            if (rewardId == null) return const _MissingRouteDataScreen();
+            return RewardDetailScreen(rewardId: rewardId);
+          },
+        ),
+        GoRoute(
+          path: '/admin/partners',
+          builder: (context, state) => const PartnerAdminScreen(),
+        ),
+        GoRoute(
+          path: '/my-rewards',
+          builder: (context, state) => const RedemptionHistoryScreen(),
+        ),
+        GoRoute(
+          path: '/partner-apply',
+          builder: (context, state) => const PartnerApplicationScreen(),
+        ),
+        GoRoute(
+          path: '/admin/partner-detail/:id',
+          builder: (context, state) => PartnerDetailAdminScreen(partnerId: state.pathParameters['id']!),
         ),
       ],
     ),

@@ -17,6 +17,9 @@ import 'package:http/http.dart' as http;
 import 'package:matchfit/features/xp_engine/providers/xp_engine_provider.dart';
 import 'package:matchfit/features/economy_engine/providers/economy_engine_provider.dart';
 import 'package:matchfit/features/home/presentation/widgets/matchup_module.dart';
+import 'package:matchfit/features/home/presentation/widgets/home_rewards_section.dart';
+import 'package:matchfit/features/home/presentation/widgets/campaign_hero_banner.dart';
+import 'package:matchfit/features/home/presentation/widgets/sponsor_logo_strip.dart';
 
 // ── Providers ──────────────────────────────────────────────────────
 
@@ -309,9 +312,7 @@ final recommendedEventsProvider =
             .eq('user_id', user.id);
             
         final preferredSports = List<Map<String, dynamic>>.from(userSportsResponse)
-            .map((e) => e['sport_id'])
-            .where((id) => id != null)
-            .cast<int>()
+            .map((e) => e['sport_id'].toString())
             .toList();
 
         final userLoc = await ref.watch(userLocationProvider.future);
@@ -334,7 +335,7 @@ final recommendedEventsProvider =
             .toList();
 
         if (preferredSports.isNotEmpty) {
-          filtered = filtered.where((e) => preferredSports.contains(e['sport_id'])).toList();
+          filtered = filtered.where((e) => preferredSports.contains(e['sport_id'].toString())).toList();
         }
 
         return filtered;
@@ -359,6 +360,7 @@ class HomeScreen extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildHeader(context, ref),
+              const CampaignHeroBanner(),
               const SizedBox(height: 16),
               _buildHeroEvent(context, ref),
               const SizedBox(height: 24),
@@ -366,8 +368,9 @@ class HomeScreen extends ConsumerWidget {
               const SizedBox(height: 24),
               _buildCompactSocialFeed(context, ref),
               const SizedBox(height: 24),
-              _buildSectionHeader('Fırsatlar ve Ödüller', null),
-              _buildOpportunities(context),
+              const HomeRewardsSection(),
+              const SizedBox(height: 16),
+              const SponsorLogoStrip(),
               const SizedBox(height: 24),
               _buildSectionHeader('Senin İçin Etkinlikler', 'Tümünü Gör', onActionTap: () => context.go('/explore')),
               _buildRecommendedEventsList(context, ref),
@@ -986,112 +989,6 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildOpportunities(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children: [
-          Container(
-            width: 260,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF1E2A1E), Color(0xFF121A12)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: MatchFitTheme.accentGreen.withOpacity(0.2)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.monetization_on, color: MatchFitTheme.accentGreen, size: 18),
-                    const SizedBox(width: 8),
-                    const Text('Haftalık Görev', style: TextStyle(color: MatchFitTheme.accentGreen, fontWeight: FontWeight.bold, fontSize: 12)),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                const Text('3 Etkinliğe Katıl', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                const SizedBox(height: 4),
-                const Text('Görev bitimine 2 gün kaldı', style: TextStyle(color: Colors.white54, fontSize: 11)),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('+50 MF Kazan', style: TextStyle(color: MatchFitTheme.accentGreen, fontWeight: FontWeight.bold, fontSize: 14)),
-                    ElevatedButton(
-                      onPressed: () {},
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: MatchFitTheme.accentGreen.withOpacity(0.2),
-                        foregroundColor: MatchFitTheme.accentGreen,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        minimumSize: Size.zero,
-                        elevation: 0,
-                      ),
-                      child: const Text('Katıl', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                    ),
-                  ],
-                )
-              ],
-            ),
-          ),
-          const SizedBox(width: 16),
-          Container(
-            width: 260,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF1A1F35), Color(0xFF0F1220)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.blue.withOpacity(0.2)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.card_giftcard, color: Colors.blue, size: 18),
-                    const SizedBox(width: 8),
-                    const Text('Partner Fırsatı', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 12)),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                const Text('Decathlon %15 İndirim', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                const SizedBox(height: 4),
-                const Text('300 MF Puan ile aç', style: TextStyle(color: Colors.white54, fontSize: 11)),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    ElevatedButton(
-                      onPressed: () {},
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue.withOpacity(0.2),
-                        foregroundColor: Colors.blue,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        minimumSize: Size.zero,
-                        elevation: 0,
-                      ),
-                      child: const Text('İncele', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                    ),
-                  ],
-                )
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildEventCard({
     required String title,

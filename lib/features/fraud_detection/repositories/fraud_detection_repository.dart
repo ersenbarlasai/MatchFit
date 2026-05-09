@@ -1,57 +1,58 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-final fraudDetectionRepositoryProvider = Provider((ref) => FraudDetectionRepository());
+final fraudDetectionRepositoryProvider =
+    Provider<FraudDetectionRepository>((ref) {
+  return FraudDetectionRepository(Supabase.instance.client);
+});
 
 class FraudDetectionRepository {
-  final _supabase = Supabase.instance.client;
+  final SupabaseClient _supabase;
 
-  /// Logs a fraud signal from any agent.
-  /// sourceAgent: e.g. '@Guardian'
-  /// signalType: e.g. 'bad_word', 'location_spoof'
-  Future<String?> logFraudSignal({
+  FraudDetectionRepository(this._supabase);
+
+  Future<void> logFraudSignal({
     required String userId,
     required String sourceAgent,
     required String signalType,
-    String severity = 'low',
+    String severity = 'medium',
     double confidence = 1.0,
     String? eventId,
     Map<String, dynamic>? metadata,
     String? idempotencyKey,
   }) async {
     try {
-      final response = await _supabase.rpc('log_fraud_signal', params: {
-        'p_user_id': userId,
-        'p_source_agent': sourceAgent,
-        'p_signal_type': signalType,
-        'p_severity': severity,
-        'p_confidence': confidence,
-        'p_event_id': eventId,
-        'p_metadata': metadata ?? {},
-        'p_idempotency_key': idempotencyKey,
-      });
-      return response as String?;
+      await _supabase.rpc(
+        'log_fraud_signal',
+        params: {
+          'p_user_id': userId,
+          'p_source_agent': sourceAgent,
+          'p_signal_type': signalType,
+          'p_severity': severity,
+          'p_confidence': confidence,
+          'p_event_id': eventId,
+          'p_metadata': metadata ?? <String, dynamic>{},
+          'p_idempotency_key': idempotencyKey,
+        },
+      );
     } catch (e) {
-      // In a real app, log error but don't break the user flow as fraud detection is often async/secondary
-      return null;
+      debugPrint('[@FraudDetection] Failed to log fraud signal: $e');
     }
   }
 
-  /// Fetches a high-level risk summary for a user.
-  /// Used by @Referee, @RankingEngine, etc.
-  Future<Map<String, dynamic>> getUserRiskSummary(String userId) async {
+  Future<Map<String, dynamic>?> getUserRiskSummary(String userId) async {
     try {
-      final response = await _supabase.rpc('get_user_risk_summary', params: {
-        'p_user_id': userId,
-      });
-      return Map<String, dynamic>.from(response);
+      final response = await _supabase.rpc(
+        'get_user_risk_summary',
+        params: {'p_user_id': userId},
+      );
+
+      if (response is Map<String, dynamic>) return response;
+      return null;
     } catch (e) {
-      return {
-        'user_id': userId,
-        'score': 0,
-        'risk_level': 'clear',
-        'is_blocked': false
-      };
+      debugPrint('[@FraudDetection] Failed to fetch risk summary: $e');
+      return null;
     }
   }
 }

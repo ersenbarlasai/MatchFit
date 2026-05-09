@@ -41,14 +41,15 @@ class CoachEngineRepository {
       final user = _supabase.auth.currentUser;
       if (user == null) throw Exception('Kullanıcı bulunamadı');
 
-      final payload = {
-        ...data,
-        'user_id': user.id,
-        'verification_level': 'pending', // Starts pending
-        'updated_at': DateTime.now().toIso8601String(),
-      };
-
-      await _supabase.from('coaches').upsert(payload);
+      await _supabase.rpc('submit_coach_application', params: {
+        'p_sub_branch': data['sub_branch'],
+        'p_experience_years': data['experience_years'],
+        'p_bio': data['bio'],
+        'p_work_location': data['work_location'],
+        'p_intro_video_url': data['intro_video_url'],
+        'p_price_min': data['price_min'],
+        'p_price_max': data['price_max'],
+      });
       
       // Log for Verification Agent
       await _logAgentAction(
@@ -82,12 +83,11 @@ class CoachEngineRepository {
       );
       final fileUrl = _supabase.storage.from('documents').getPublicUrl(path);
 
-      // Save to coach_documents table
-      await _supabase.from('coach_documents').insert({
-        'coach_id': user.id,
-        'doc_type': docType,
-        'file_url': fileUrl,
-        'status': 'pending',
+      // Save using RPC for hardening
+      await _supabase.rpc('submit_coach_document', params: {
+        'p_doc_type': docType,
+        'p_file_url': fileUrl,
+        'p_idempotency_key': '${user.id}_${docType}_${file.name}_${DateTime.now().millisecondsSinceEpoch}',
       });
 
       // Log for Verification Agent
@@ -116,6 +116,163 @@ class CoachEngineRepository {
       });
     } catch (e) {
       debugPrint('[@CoachEngine] Failed to log agent action: $e');
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getActiveCoaches() async {
+    try {
+      final response = await _supabase
+          .from('coaches')
+          .select()
+          .eq('is_active', true)
+          .inFilter('verification_level', ['basic', 'certified', 'elite'])
+          .order('verification_level', ascending: false)
+          .order('rating_avg', ascending: false);
+
+      final coaches = List<Map<String, dynamic>>.from(response);
+
+      for (final coach in coaches) {
+        final profileResponse = await _supabase
+            .from('profiles')
+            .select('full_name, avatar_url, city, district, trust_score, bio')
+            .eq('id', coach['user_id'])
+            .maybeSingle();
+        coach['profiles'] = profileResponse;
+      }
+
+      return coaches;
+    } catch (e) {
+      debugPrint('[@CoachEngine] Error fetching active coaches: $e');
+      return [];
+    }
+  }
+
+  Future<Map<String, dynamic>?> getCoachDetail(String userId) async {
+    try {
+      final response = await _supabase
+          .from('coaches')
+          .select('*, coach_documents(*)')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+      if (response == null) return null;
+
+      final coach = Map<String, dynamic>.from(response);
+      final profileResponse = await _supabase
+          .from('profiles')
+          .select('full_name, avatar_url, city, district, trust_score, bio')
+          .eq('id', userId)
+          .maybeSingle();
+      coach['profiles'] = profileResponse;
+      return coach;
+    } catch (e) {
+      debugPrint('[@CoachEngine] Error fetching coach detail: $e');
+      return null;
+    }
+  }
+
+  // ── Availability & Booking Methods ────────────────────────────────────────
+
+  Future<List<Map<String, dynamic>>> getCoachAvailability(String coachId) async {
+    try {
+      final response = await _supabase.rpc('get_coach_availability', params: {
+        'p_coach_id': coachId,
+      });
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      debugPrint('[@CoachEngine] Error fetching availability: $e');
+      return [];
+    }
+  }
+
+  Future<void> upsertCoachAvailability(List<Map<String, dynamic>> slots) async {
+    try {
+      await _supabase.rpc('upsert_coach_availability', params: {
+        'p_slots': slots,
+      });
+    } catch (e) {
+      debugPrint('[@CoachEngine] Error upserting availability: $e');
+      rethrow;
+    }
+  }
+
+  Future<String> requestCoachSession({
+    required String coachId,
+    required String date,
+    required String startTime,
+    required String endTime,
+    String? idempotencyKey,
+  }) async {
+    try {
+      final response = await _supabase.rpc('request_coach_session', params: {
+        'p_coach_id': coachId,
+        'p_session_date': date,
+        'p_start_time': startTime,
+        'p_end_time': endTime,
+        'p_idempotency_key': idempotencyKey,
+      });
+      return response as String;
+    } catch (e) {
+      debugPrint('[@CoachEngine] Error requesting session: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> handleCoachSessionRequest({
+    required String sessionId,
+    required String action,
+    String? reason,
+  }) async {
+    try {
+      await _supabase.rpc('handle_coach_session_request', params: {
+        'p_session_id': sessionId,
+        'p_action': action,
+        'p_reason': reason,
+      });
+    } catch (e) {
+      debugPrint('[@CoachEngine] Error handling session request: $e');
+      rethrow;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getMyCoachSessions() async {
+    try {
+      final response = await _supabase.rpc('get_my_coach_sessions');
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      debugPrint('[@CoachEngine] Error fetching my sessions: $e');
+      return [];
+    }
+  }
+
+  Future<void> submitCoachReview({
+    required String sessionId,
+    required int rating,
+    String? comment,
+    String? idempotencyKey,
+  }) async {
+    try {
+      await _supabase.rpc('submit_coach_review', params: {
+        'p_session_id': sessionId,
+        'p_rating': rating,
+        'p_comment': comment,
+        'p_idempotency_key': idempotencyKey,
+      });
+    } catch (e) {
+      debugPrint('[@CoachEngine] Error submitting review: $e');
+      rethrow;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getCoachReviews(String coachId) async {
+    try {
+      final response = await _supabase.rpc('get_coach_reviews', params: {
+        'p_coach_id': coachId,
+      });
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      debugPrint('[@CoachEngine] Error fetching reviews: $e');
+      return [];
     }
   }
 
@@ -184,19 +341,12 @@ class CoachEngineRepository {
     String? reason,
   }) async {
     try {
-      await _supabase.from('coaches').update({
-        'verification_level': level,
-        'is_active': isActive,
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('user_id', userId);
-
-      // Log the decision
-      await _logAgentAction(
-        userId, 
-        '@CoachVerificationAgent', 
-        isActive ? 'coach_approved' : 'coach_rejected', 
-        {'level': level, 'reason': reason}
-      );
+      await _supabase.rpc('handle_coach_verification', params: {
+        'p_user_id': userId,
+        'p_level': level,
+        'p_is_active': isActive,
+        'p_reason': reason,
+      });
     } catch (e) {
       debugPrint('[@CoachEngine] Error updating coach status: $e');
       rethrow;
@@ -206,12 +356,11 @@ class CoachEngineRepository {
   /// Update individual document status
   Future<void> updateDocumentStatus(String docId, String status, {String? reason}) async {
     try {
-      await _supabase.from('coach_documents').update({
-        'status': status,
-        'rejection_reason': reason,
-        'reviewed_at': DateTime.now().toIso8601String(),
-        'reviewed_by': _supabase.auth.currentUser?.id,
-      }).eq('id', docId);
+      await _supabase.rpc('handle_coach_document_review', params: {
+        'p_doc_id': docId,
+        'p_status': status,
+        'p_reason': reason,
+      });
     } catch (e) {
       debugPrint('[@CoachEngine] Error updating document status: $e');
       rethrow;
